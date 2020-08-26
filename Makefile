@@ -1,5 +1,5 @@
 a.out: syntax.l syntax.y ast.h
 	bison -d syntax.y
-	flex syntax.l
+	flex++ syntax.l
 	bison -v --debug syntax.y
-	gcc -c -g lex.yy.c
+	g++ -c -g lex.yy.cc -o syntax.tab.cc
