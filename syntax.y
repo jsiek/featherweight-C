@@ -16,25 +16,25 @@ void yyerror(char*s)  {
 extern int yylex();
 extern int yywrap();
 
-#include "typecheck.h"
-#include "eval.h"
+//#include "typecheck.h"
+//#include "eval.h"
 
-static FunDefList* program;
+static list<FunDef> program;
 %}
 %union
  {
    char* str;
    int  num;
    Type* type;
-   TypeList* type_list;
+   list<Type>* type_list;
    Exp* expr;
-   ExpList* expr_list;
-   TypeEnv* var_decls;
-   TypeEnv* params;
+   list<Exp>* expr_list;
+   VarTypes* var_decls;
+   VarTypes* params;
    Stmt* stmt;
-   StmtList* stmt_list;
+   list<Stmt*>* stmt_list;
    FunDef* fun_def;
-   FunDefList* fun_def_list;
+   list<FunDef*>* fun_def_list;
 };
 
 %token <num> INT
@@ -47,7 +47,6 @@ static FunDefList* program;
 %type <exp_list> expr_list
 %type <exp> simple_expr
 %type <type> type
-%type <type> simple_type
 %type <type_list> type_list
 %type <var_decls> var_decls
 %type <params> params
@@ -55,7 +54,7 @@ static FunDefList* program;
 %token AND
 %token OR
 %token INTTY
-%token FUNTY
+%token FUN
 %token COLON
 %token SEMICOLON
 %token COMMA
@@ -115,14 +114,11 @@ type_list:
 | type { $$ = insert_type($1, 0); }
 | type COMMA type_list { $$ = insert_type($1, $3); }
 ;
-simple_type:
-  INTTY             { $$ = make_int_type(yylineno); }
-| LP type RP        { $$ = $2; }
-;
 type:
-  simple_type                { $$ = $1; }
-| FUNTY LP type_list RP type { $$ = make_fun_type(yylineno, $3, $5); }
-| simple_type ASTR           { $$ = make_ptr_type(yylineno, $1); }
+  INTTY             { $$ = make_int_type(yylineno); }
+| FUN LP type_list RP type { $$ = make_fun_type(yylineno, $3, $5); }
+| LP type RP          { $$ = $2; }
+| type ASTR           { $$ = make_ptr_type(yylineno, $1); }
 ;
 expr_list:
   /* empty */          { $$ = 0; }
@@ -163,8 +159,8 @@ stmt_list:
 | stmt stmt_list { insert_stmt($1, $2); }
 ;
 fun_def:
-  type ID LP params RP LC var_decls stmt_list RC
-    { $$ = make_fun_def(yylineno, $2, $1, $4, $7, $8); }
+  FUN ID LP params RP type LC var_decls stmt_list RC
+    { $$ = make_fun_def(yylineno, $2, $6, $4, $8, $9); }
 ;
 fun_def_list:
   /* empty */ { $$ = 0; }

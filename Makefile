@@ -3,3 +3,4 @@ a.out: syntax.l syntax.y ast.h
 	flex++ syntax.l
 	bison -v --debug syntax.y
 	g++ -c -g lex.yy.cc -o syntax.tab.cc
+	g++ -std=c++11 -c -g ast.cc

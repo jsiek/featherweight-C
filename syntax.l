@@ -28,14 +28,14 @@ GOTO   "goto"
 IF     "if"
 FREE   "free"
 INTTY  "int"
-FUNTY  "fun"
+FUN    "fun"
 %%
 {AND} { return AND; }
 {OR} { return OR; }
 {BANG} { return BANG; }
 {IF} { return IF; }
 {INTTY} { return INTTY; }
-{FUNTY} { return FUNTY; }
+{FUN} { return FUN; }
 {COLON} { return COLON; }
 {SEMICOLON} { return SEMICOLON; }
 {COMMA} { return COMMA; }
