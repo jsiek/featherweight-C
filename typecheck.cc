@@ -1,16 +1,8 @@
 #include "typecheck.h"
 #include <vector>
+#include <set>
 using std::vector;
-
-Type* lookup(TypeEnv* env, string var) {
-  if (env == NULL)
-    return NULL;
-  else if (env->var == var) {
-    return env->type;
-  } else {
-    return lookup(env->next, var);
-  }
-}
+using std::set;
 
 template<class T>
 bool list_equal(list<T*>* ts1, list<T*>* ts2, bool(*eq)(T*,T*)) {
@@ -107,7 +99,8 @@ Type* typecheck_exp(Exp* e, TypeEnv* env) {
   }
 }
 
-void typecheck_stmt(Stmt* s, TypeEnv* env, Type* ret_type) {
+void typecheck_stmt(Stmt* s, TypeEnv* env, Type* ret_type,
+                    set<string>& labels) {
   switch (s->tag) {
   case Assign: {
     Type* lhsT = typecheck_lvalue(s->u.assign.lhs, env);
@@ -148,11 +141,23 @@ void typecheck_stmt(Stmt* s, TypeEnv* env, Type* ret_type) {
                 typecheck_exp(s->u.if_goto.cond, env));
     break;
   case Label:
-    typecheck_stmt(s->u.labeled.stmt, env, ret_type);
+    if (labels.count(*s->u.labeled.label) > 0) {
+      printf("error, duplicate label %s\n", s->u.labeled.label->c_str());
+      exit(-1);
+    }
+    labels.insert(*s->u.labeled.label);
+    typecheck_stmt(s->u.labeled.stmt, env, ret_type, labels);
     break;
   case Return:
     expect_type(ret_type, typecheck_exp(s->u.ret, env));
     break;
+  }
+}
+
+void typecheck_block(Block* b, TypeEnv* env, Type* return_type,
+                     set<string>& labels) {
+  for (auto i = b->stmts->begin(); i != b->stmts->end(); ++i) {
+    typecheck_stmt(*i, env, return_type, labels);
   }
 }
 
@@ -163,8 +168,16 @@ void typecheck_fun_def(FunDef* f, TypeEnv* env) {
   for (auto i = f->locals->begin(); i != f->locals->end(); ++i) {
     env = new TypeEnv(i->first, i->second, env);
   }
+  if (f->name == "main") {
+    expect_type(make_int_type(f->lineno), f->return_type);
+    if (f->params->size() != 0) {
+      printf("error, main function may not have any parameters\n");
+      exit(-1);
+    }
+  }
+  set<string> labels;
   for (auto i = f->body->begin(); i != f->body->end(); ++i) {
-    typecheck_stmt(*i, env, f->return_type);
+    typecheck_block(*i, env, f->return_type, labels);
   }
 }
 

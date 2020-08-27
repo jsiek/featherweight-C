@@ -43,6 +43,8 @@ static list<FunDef*> program;
    list<Stmt*>* stmt_list;
    FunDef* fun_def;
    list<FunDef*>* fun_def_list;
+   Block* block;
+   list<Block*>* block_list;
 };
 
 %token <num> INT
@@ -51,6 +53,8 @@ static list<FunDef*> program;
 %type <fun_def_list> fun_def_list
 %type <stmt> stmt
 %type <stmt_list> stmt_list
+%type <block> block
+%type <block_list> block_list
 %type <lvalue> lvalue
 %type <expr> expr
 %type <expr_list> expr_list
@@ -174,8 +178,15 @@ stmt_list:
   /* empty */    { $$ = new list<Stmt*>(); }
 | stmt stmt_list { $$ = $2; $$->push_front($1); }
 ;
+block:
+  ID COLON LC stmt_list RC { $$ = new Block($1, $4); }
+;
+block_list:
+  block { $$ = new list<Block*>(); $$->push_back($1); }
+| block block_list { $$ = $2; $$->push_back($1); }
+;
 fun_def:
-  FUN ID LP params RP type LC var_decls stmt_list RC
+  FUN ID LP params RP type LC var_decls block_list RC
     { $$ = make_fun_def(yylineno, $2, $6, $4, $8, $9); }
 ;
 fun_def_list:

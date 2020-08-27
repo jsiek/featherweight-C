@@ -125,17 +125,25 @@ void print_stmt(Stmt*);
 
 /***** Declarations *****/
 
+struct Block {
+  string label;
+  list<Stmt*>* stmts;
+  Block(string l, list<Stmt*>* ss) : label(l), stmts(ss) { }
+};
+
+/***** Declarations *****/
+
 struct FunDef {
   int lineno;
   string name;
   Type* return_type;
   VarTypes* params;
   VarTypes* locals;
-  list<Stmt*>* body;
+  list<Block*>* body;
 };
 
 FunDef* make_fun_def(int lineno, string name, Type* ret_type, VarTypes* params,
-                     VarTypes* locals, list<Stmt*>* body);
+                     VarTypes* locals, list<Block*>* body);
 void print_fun_def(FunDef*);
 
 #endif

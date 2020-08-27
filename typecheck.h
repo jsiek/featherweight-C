@@ -2,13 +2,9 @@
 #define TYPECHECK_H
 
 #include "ast.h"
+#include "assoc_list.h"
 
-struct TypeEnv {
-  string var;
-  Type* type;
-  TypeEnv* next;
-  TypeEnv(string v, Type* t, TypeEnv* n) : var(v), type(t), next(n) { }
-};
+typedef Node<string, Type*> TypeEnv;
 
 Type* typecheck_exp(Exp*, TypeEnv*);
 void typecheck_stmt(Stmt*, TypeEnv*, Type*);

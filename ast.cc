@@ -301,7 +301,7 @@ void print_stmt(Stmt* s) {
 /***** Declarations *****/
 
 FunDef* make_fun_def(int lineno, string name, Type* ret_type, VarTypes* params,
-                     VarTypes* locals, list<Stmt*>* body) {
+                     VarTypes* locals, list<Block*>* body) {
   FunDef* f = new FunDef();
   f->lineno = lineno;
   f->name = name;
@@ -342,8 +342,11 @@ void print_fun_def(FunDef* f) {
     print_var_decls(f->locals);
     printf("\n");
   }
-  printf("  ");
-  print_list(f->body, print_stmt, "\n  ");
+  for (auto i = f->body->begin(); i != f->body->end(); ++i) {
+    printf("%s:\n", (*i)->label.c_str());
+    printf("  ");
+    print_list((*i)->stmts, print_stmt, "\n  ");
+  }
   printf("\n}");
 }
 
