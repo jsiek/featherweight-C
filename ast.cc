@@ -337,9 +337,12 @@ void print_fun_def(FunDef* f) {
   printf(") ");
   print_type(f->return_type);
   printf(" {\n");
+  if (f->locals->size() > 0) {
+    printf("  ");
+    print_var_decls(f->locals);
+    printf("\n");
+  }
   printf("  ");
-  print_var_decls(f->locals);
-  printf("\n  ");
   print_list(f->body, print_stmt, "\n  ");
   printf("\n}");
 }
