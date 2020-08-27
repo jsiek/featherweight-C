@@ -343,11 +343,12 @@ void print_fun_def(FunDef* f) {
     printf("\n");
   }
   for (auto i = f->body->begin(); i != f->body->end(); ++i) {
-    printf("%s:\n", (*i)->label.c_str());
-    printf("  ");
-    print_list((*i)->stmts, print_stmt, "\n  ");
+    printf("  %s: {\n", (*i)->label.c_str());
+    printf("    ");
+    print_list((*i)->stmts, print_stmt, "\n    ");
+    printf("\n  }\n");
   }
-  printf("\n}");
+  printf("}");
 }
 
 char *read_file(FILE* fp)
