@@ -99,7 +99,7 @@ void print_exp(Exp*);
 
 /***** Statements *****/
 
-enum StmtKind { Assign, Call, Free, IfGoto, Label, Return };
+enum StmtKind { Assign, Call, Free, IfGoto, Return };
 
 struct Stmt {
   int lineno;
@@ -118,7 +118,6 @@ Stmt* make_assign(int lineno, LValue* lhs, Exp* rhs);
 Stmt* make_call(int lineno, LValue* lhs, Exp* fun, list<Exp*>* args);
 Stmt* make_free(int lineno, Exp* e);
 Stmt* make_if_goto(int lineno, Exp* cond, string target);
-Stmt* make_labeled(int lineno, string label, Stmt* stmt);
 Stmt* make_return(int lineno, Exp* e);
 
 void print_stmt(Stmt*);

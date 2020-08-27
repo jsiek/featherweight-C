@@ -241,15 +241,6 @@ Stmt* make_if_goto(int lineno, Exp* cond, string target)  {
   return s;
 }
 
-Stmt* make_labeled(int lineno, string label, Stmt* stmt)  {
-  Stmt* s = new Stmt();
-  s->lineno = lineno;
-  s->tag = Label;
-  s->u.labeled.label = new string(label);
-  s->u.labeled.stmt = stmt;
-  return s;
-}
-
 Stmt* make_return(int lineno, Exp* e) {
   Stmt* s = new Stmt();
   s->lineno = lineno;
@@ -285,10 +276,6 @@ void print_stmt(Stmt* s) {
     print_exp(s->u.if_goto.cond);
     printf(") goto ");
     printf("%s;", s->u.if_goto.target->c_str());
-    break;
-  case Label:
-    printf("%s: ", s->u.labeled.label->c_str());
-    print_stmt(s->u.labeled.stmt);
     break;
   case Return:
     printf("return ");

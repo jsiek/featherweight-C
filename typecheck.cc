@@ -1,8 +1,11 @@
 #include "typecheck.h"
 #include <vector>
 #include <set>
+#include <iostream>
 using std::vector;
 using std::set;
+using std::cerr;
+using std::endl;
 
 template<class T>
 bool list_equal(list<T*>* ts1, list<T*>* ts2, bool(*eq)(T*,T*)) {
@@ -140,14 +143,6 @@ void typecheck_stmt(Stmt* s, TypeEnv* env, Type* ret_type,
     expect_type(make_bool_type(s->lineno),
                 typecheck_exp(s->u.if_goto.cond, env));
     break;
-  case Label:
-    if (labels.count(*s->u.labeled.label) > 0) {
-      printf("error, duplicate label %s\n", s->u.labeled.label->c_str());
-      exit(-1);
-    }
-    labels.insert(*s->u.labeled.label);
-    typecheck_stmt(s->u.labeled.stmt, env, ret_type, labels);
-    break;
   case Return:
     expect_type(ret_type, typecheck_exp(s->u.ret, env));
     break;
@@ -183,6 +178,7 @@ void typecheck_fun_def(FunDef* f, TypeEnv* env) {
 
 TypeEnv* top_level(list<FunDef*>* fs) {
   TypeEnv* top = 0;
+  bool found_main = false;
   for (auto i = fs->begin(); i != fs->end(); ++i) {
     list<Type*>* ps = new list<Type*>();
     for (auto pt = (*i)->params->begin(); pt != (*i)->params->end(); ++pt) {
@@ -191,6 +187,11 @@ TypeEnv* top_level(list<FunDef*>* fs) {
     top = new TypeEnv((*i)->name,
                       make_fun_type((*i)->lineno, ps, (*i)->return_type),
                       top);
+    if ((*i)->name == "main") {
+      found_main = true;
+    }
   }
+  if (found_main == false)
+    cerr << "error, program must contain a function named `main`" << endl;
   return top;
 }

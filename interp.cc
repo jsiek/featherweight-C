@@ -6,6 +6,7 @@
 
 using std::vector;
 using std::map;
+using std::cout;
 using std::cerr;
 using std::endl;
 
@@ -98,6 +99,16 @@ int val_to_bool(Value* v) {
   }
 }
 
+address val_to_ptr(Value* v) {
+  switch (v->tag) {
+  case PtrT:
+    return v->u.ptr;
+  default:
+    cerr << "type error, expected a pointer" << endl;
+    exit(-1);
+  }
+}
+
 bool val_equal(Value* v1, Value* v2) {
   return (v1->tag == IntT && v2->tag == IntT && v1->u.integer == v2->u.integer)
     || (v1->tag == BoolT && v2->tag == BoolT && v1->u.boolean == v2->u.boolean)
@@ -150,17 +161,72 @@ Value* interp_exp(Exp* e, State* state) {
   }
 }
 
-void interp_stmt(Stmt* s, State* state) {
-  
+typedef list<Block*>::iterator block_iter;
+
+block_iter find_block(list<Block*>* blocks, string label) {
+  for (auto b = blocks->begin(); b != blocks->end(); ++b) {
+    if ((*b)->label == label)
+      return b;
+  }
+  return blocks->end();
 }
 
-int interp_program(list<FunDef*>* fs) {
+int interp_blocks(list<Block*>* blocks, State* state) {
+  auto curr = find_block(blocks, "start");
+
+  while (curr != blocks->end()) {
+    for (auto s = (*curr)->stmts->begin(); s != (*curr)->stmts->end(); ++s) {
+      switch ((*s)->tag) {
+      case Assign: {
+        address a = interp_lvalue((*s)->u.assign.lhs, state);
+        Value* v = interp_exp((*s)->u.assign.rhs, state);
+        state->heap[a] = v;
+        break;
+      }
+      case Call: {
+        cerr << "call not implemented" << endl;
+        break;
+      }
+      case Free: {
+        Value* v = interp_exp((*s)->u.free, state);
+        address a = val_to_ptr(v);
+        state->heap[a]->alive = false;
+        break;
+      }
+      case IfGoto: {
+        Value* c = interp_exp((*s)->u.if_goto.cond, state);
+        if (val_to_bool(c)) {
+          curr = find_block(blocks, *((*s)->u.if_goto.target));
+          goto finish_block;
+        }
+        break;
+      }
+      case Return: {
+        Value* v = interp_exp((*s)->u.free, state);
+        return val_to_int(v);
+      }
+      }
+    }
+  finish_block:
+    ;
+  }
+  cerr << "fell through end of function without return" << endl;
+  exit(-1);
+}
+
+void interp_program(list<FunDef*>* fs) {
   FunDef* main = 0;
   for (auto iter = fs->begin(); iter != fs->end(); ++iter) {
     if ((*iter)->name == string("main"))
       main = *iter;
   }
-
-  
-  return 0;
+  State* initial = new State();
+  for (auto p = main->params->begin(); p != main->params->end(); ++p) {
+    address a = initial->heap.size();
+    initial->heap.push_back(0);
+    initial->stack.front()->env =
+      new Env((*p).first, a, initial->stack.front()->env);
+  }
+  int ret = interp_blocks(main->body, initial);
+  cout << "result: " << ret << endl;
 }

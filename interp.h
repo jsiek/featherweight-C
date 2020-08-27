@@ -1,3 +1,3 @@
 #include "ast.h"
 
-int interp_program(list<FunDef*>* fs);
+void interp_program(list<FunDef*>* fs);

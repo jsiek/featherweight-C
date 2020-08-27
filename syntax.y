@@ -4,6 +4,7 @@
 #include <stdarg.h>
 #include "ast.h"
 #include "typecheck.h"
+#include "interp.h"
 
 extern FILE* yyin;
 extern int yylineno;
@@ -106,6 +107,7 @@ input:
     }
     printf("\n");
     printf("type checking complete\n");
+    interp_program($1);
   /*
   Type* t = typecheck($1, 0, 0);
   Value* v = eval($1, 0, 0); 
@@ -169,8 +171,6 @@ stmt:
     { $$ = make_free(yylineno, $3); }
 | IF LP expr RP GOTO ID SEMICOLON
     { $$ = make_if_goto(yylineno, $3, $6); }
-| ID COLON stmt 
-    { $$ = make_labeled(yylineno, $1, $3); }
 | RETURN expr SEMICOLON
     { $$ = make_return(yylineno, $2); }
 ;
