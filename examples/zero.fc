@@ -1,0 +1,5 @@
+fun main () int {
+  int x;
+  int y;
+  return 0;
+}

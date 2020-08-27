@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include "ast.h"
+#include "typecheck.h"
 
 extern FILE* yyin;
 extern int yylineno;
@@ -18,17 +20,23 @@ extern int yywrap();
 
 //#include "typecheck.h"
 //#include "eval.h"
-
-static list<FunDef> program;
+#include <list>
+#include "ast.h"
+using std::list;
+using std::pair;
+using std::make_pair;
+  
+static list<FunDef*> program;
 %}
 %union
  {
    char* str;
    int  num;
    Type* type;
-   list<Type>* type_list;
+   list<Type*>* type_list;
+   LValue* lvalue;
    Exp* expr;
-   list<Exp>* expr_list;
+   list<Exp*>* expr_list;
    VarTypes* var_decls;
    VarTypes* params;
    Stmt* stmt;
@@ -43,9 +51,9 @@ static list<FunDef> program;
 %type <fun_def_list> fun_def_list
 %type <stmt> stmt
 %type <stmt_list> stmt_list
-%type <exp> expr
-%type <exp_list> expr_list
-%type <exp> simple_expr
+%type <lvalue> lvalue
+%type <expr> expr
+%type <expr_list> expr_list
 %type <type> type
 %type <type_list> type_list
 %type <var_decls> var_decls
@@ -86,6 +94,14 @@ static list<FunDef> program;
 %%
 input:
   fun_def_list {
+    printf("program:\n");
+    print_list($1, print_fun_def, "\n");
+    TypeEnv* top = top_level($1);
+    for (auto i = $1->begin(); i != $1->end(); ++i) {
+      typecheck_fun_def(*i, top);
+    }
+    printf("\n");
+    printf("type checking complete\n");
   /*
   Type* t = typecheck($1, 0, 0);
   Value* v = eval($1, 0, 0); 
@@ -101,18 +117,17 @@ input:
  }
 ;
 params:
-  /* empty */ { $$ = 0; }
-| type ID  { $$ = make_type_binding($2, $1, 0); }
-| type ID COMMA params { $$ = make_type_binding($2, $1, $4); }
+  /* empty */ { $$ = new VarTypes(); }
+| type ID COMMA params { $$ = $4; $$->push_front(make_pair($2, $1)); }
 ;
 var_decls:
-  /* empty */ { $$ = 0; }
-| type ID SEMICOLON var_decls { $$ = make_type_binding($2, $1, $4); }
+  /* empty */ { $$ = new VarTypes(); }
+| type ID SEMICOLON var_decls { $$ = $4; $$->push_front(make_pair($2, $1)); }
 ;
 type_list:
-  /* empty */ { $$ = 0; }
-| type { $$ = insert_type($1, 0); }
-| type COMMA type_list { $$ = insert_type($1, $3); }
+  /* empty */ { $$ = new list<Type*>(); }
+| type { $$ = new list<Type*>(); $$->push_front($1); }
+| type COMMA type_list { $$ = $3; $$->push_front($1); }
 ;
 type:
   INTTY             { $$ = make_int_type(yylineno); }
@@ -120,30 +135,31 @@ type:
 | LP type RP          { $$ = $2; }
 | type ASTR           { $$ = make_ptr_type(yylineno, $1); }
 ;
-expr_list:
-  /* empty */          { $$ = 0; }
-| expr                 { $$ = insert_term($1, 0); }
-| expr COMMA expr_list { $$ = insert_term($1, $3); }
-;
-simple_expr:
-  INT              { $$ = make_int(yylineno, $1); }
-| ID               { $$ = make_var(yylineno, $1); }
-| LP expr RP       { $$ = $2; }
+lvalue:
+  ID               { $$ = make_var(yylineno, $1); }
+| ASTR expr        { $$ = make_deref(yylineno, $2); }
 ;
 expr:
-  simple_expr      { $$ = $1; }
-| expr EQUAL expr  { $$ = make_binop(yylineno, Equal, $1, $3); }
+  lvalue           { $$ = make_lval_exp(yylineno, $1); }
+| INT              { $$ = make_int(yylineno, $1); }
+| expr EQUAL expr  { $$ = make_binop(yylineno, Eq, $1, $3); }
 | expr PLUS expr   { $$ = make_binop(yylineno, Add, $1, $3); }
 | expr MINUS expr  { $$ = make_binop(yylineno, Sub, $1, $3); }
 | expr AND expr    { $$ = make_binop(yylineno, And, $1, $3); }
 | expr OR expr     { $$ = make_binop(yylineno, Or, $1, $3); }
-| NOT expr         { $$ = make_uniop(yylineno, Not, $2); }
-| MINUS expr       { $$ = make_uniop(yylineno, Neg, $2); }
+| NOT expr         { $$ = make_unop(yylineno, Not, $2); }
+| MINUS expr       { $$ = make_unop(yylineno, Neg, $2); }
+| LP expr RP       { $$ = $2; }
+;
+expr_list:
+  /* empty */          { $$ = new list<Exp*>(); }
+| expr                 { $$ = new list<Exp*>(); $$->push_front($1); }
+| expr COMMA expr_list { $$ = $3; $$->push_front($1); }
 ;
 stmt:
-  ID ASSGN expr SEMICOLON
+  lvalue ASSGN expr SEMICOLON
     { $$ = make_assign(yylineno, $1, $3); }
-| ID ASSGN expr LP expr_list RP SEMICOLON
+| lvalue ASSGN expr LP expr_list RP SEMICOLON
     { $$ = make_call(yylineno, $1, $3, $5); }
 | FREE LP expr RP SEMICOLON
     { $$ = make_free(yylineno, $3); }
@@ -155,16 +171,16 @@ stmt:
     { $$ = make_return(yylineno, $2); }
 ;
 stmt_list:
-  /* empty */    { $$ = 0; }
-| stmt stmt_list { insert_stmt($1, $2); }
+  /* empty */    { $$ = new list<Stmt*>(); }
+| stmt stmt_list { $$ = $2; $$->push_front($1); }
 ;
 fun_def:
   FUN ID LP params RP type LC var_decls stmt_list RC
     { $$ = make_fun_def(yylineno, $2, $6, $4, $8, $9); }
 ;
 fun_def_list:
-  /* empty */ { $$ = 0; }
-| fun_def fun_def_list { insert_fun_def($1, $2); }
+  /* empty */ { $$ = new list<FunDef*>(); }
+| fun_def fun_def_list { $$ = $2; $$->push_front($1); }
 ;
 %%
 int main(int argc, char* argv[])  { 

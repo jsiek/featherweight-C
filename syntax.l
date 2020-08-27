@@ -48,6 +48,9 @@ FUN    "fun"
 {RP}     { return RP; }
 {LC}     { return LC; }
 {RC}     { return RC; }
+{RETURN} { return RETURN; }
+{GOTO}   { return GOTO; }
+{FREE}   { return FREE; }
 {ID}     {
            int n = strlen(yytext);
            yylval.str = (char*)malloc((n + 1) * sizeof(char));

@@ -2,11 +2,22 @@
 #include <string.h>
 #include "ast.h"
 
+/***** Utilities *****/
+
+char* input;
+
 /***** Types *****/
 
 Type* make_int_type(int lineno) {
   Type* t = new Type();
   t->tag = IntT;
+  t->lineno = lineno;
+  return t;
+}
+
+Type* make_bool_type(int lineno) {
+  Type* t = new Type();
+  t->tag = BoolT;
   t->lineno = lineno;
   return t;
 }
@@ -30,6 +41,9 @@ Type* make_ptr_type(int lineno, Type* type) {
 
 void print_type(Type* t) {
   switch (t->tag) {
+  case BoolT:
+    printf("bool");
+    break;
   case IntT:
     printf("int");
     break;
@@ -39,24 +53,15 @@ void print_type(Type* t) {
   case FunT:
     printf("fun ");
     printf("(");
-    print_type_list(t->u.fun.params);
+    print_list(t->u.fun.params, print_type, ", ");
     printf(") ");
     print_type(t->u.fun.ret);
   }
 }
 
-void print_type_list(list<Type*>* ts) {
-  int i = 0;
-  for (auto iter = ts->begin(); iter != ts->end(); ++iter, ++i) {
-    if (i != 0)
-      printf(", ");
-    print_type(*iter);
-  }
-}
-
 /***** L-Values *****/
 
-LValue* make_var(int lineno, char* var) {
+LValue* make_var(int lineno, string var) {
   LValue* lv = new LValue();
   lv->lineno = lineno;
   lv->tag = Var;
@@ -79,7 +84,7 @@ void print_lvalue(LValue* lv) {
     break;
   case Deref:
     printf("*");
-    print_lvalue(lv);
+    print_exp(lv->u.deref);
     break;
   }
 }
@@ -97,7 +102,7 @@ Exp* make_lval_exp(int lineno, LValue* lval) {
 Exp* make_int(int lineno, int i) {
   Exp* e = new Exp();
   e->lineno = lineno;
-  e->tag = LValueExp;
+  e->tag = Int;
   e->u.integer = i;
   return e;
 }
@@ -105,7 +110,7 @@ Exp* make_int(int lineno, int i) {
 Exp* make_addr_of(int lineno, LValue* lval) {
   Exp* e = new Exp();
   e->lineno = lineno;
-  e->tag = LValueExp;
+  e->tag = AddrOf;
   e->u.addr_of = lval;
   return e;
 }
@@ -113,8 +118,31 @@ Exp* make_addr_of(int lineno, LValue* lval) {
 Exp* make_op(int lineno, enum Operator op, list<Exp*>* args) {
   Exp* e = new Exp();
   e->lineno = lineno;
-  e->tag = LValueExp;
+  e->tag = PrimOp;
   e->u.prim_op.op = op;
+  e->u.prim_op.args = args;
+  return e;
+}
+
+Exp* make_unop(int lineno, enum Operator op, Exp* arg) {
+  Exp* e = new Exp();
+  e->lineno = lineno;
+  e->tag = PrimOp;
+  e->u.prim_op.op = op;
+  list<Exp*>* args = new list<Exp*>();
+  args->push_front(arg);
+  e->u.prim_op.args = args;
+  return e;
+}
+
+Exp* make_binop(int lineno, enum Operator op, Exp* arg1, Exp* arg2) {
+  Exp* e = new Exp();
+  e->lineno = lineno;
+  e->tag = PrimOp;
+  e->u.prim_op.op = op;
+  list<Exp*>* args = new list<Exp*>();
+  args->push_front(arg2);
+  args->push_front(arg1);
   e->u.prim_op.args = args;
   return e;
 }
@@ -175,15 +203,6 @@ void print_exp(Exp* e) {
   }
 }
 
-void print_exp_list(list<Exp*>* ts) {
-  int i = 0;
-  for (auto iter = ts->begin(); iter != ts->end(); ++iter, ++i) {
-    if (i != 0)
-      printf(", ");
-    print_exp(*iter);
-  }
-}
-
 /***** Statements *****/
 
 Stmt* make_assign(int lineno, LValue* lhs, Exp* rhs) {
@@ -217,6 +236,8 @@ Stmt* make_if_goto(int lineno, Exp* cond, string target)  {
   Stmt* s = new Stmt();
   s->lineno = lineno;
   s->tag = IfGoto;
+  s->u.if_goto.cond = cond;
+  s->u.if_goto.target = new string(target);
   return s;
 }
 
@@ -224,6 +245,8 @@ Stmt* make_labeled(int lineno, string label, Stmt* stmt)  {
   Stmt* s = new Stmt();
   s->lineno = lineno;
   s->tag = Label;
+  s->u.labeled.label = new string(label);
+  s->u.labeled.stmt = stmt;
   return s;
 }
 
@@ -231,6 +254,7 @@ Stmt* make_return(int lineno, Exp* e) {
   Stmt* s = new Stmt();
   s->lineno = lineno;
   s->tag = Return;
+  s->u.ret = e;
   return s;
 }
 
@@ -247,7 +271,7 @@ void print_stmt(Stmt* s) {
     printf(" = ");
     print_exp(s->u.call.fun);
     printf("(");
-    print_exp_list(s->u.call.args);
+    print_list(s->u.call.args, print_exp, ", ");
     printf(")");
     printf(";");
     break;
@@ -277,7 +301,7 @@ void print_stmt(Stmt* s) {
 /***** Declarations *****/
 
 FunDef* make_fun_def(int lineno, string name, Type* ret_type, VarTypes* params,
-                     VarTypes* locals, Stmt* body) {
+                     VarTypes* locals, list<Stmt*>* body) {
   FunDef* f = new FunDef();
   f->lineno = lineno;
   f->name = name;
@@ -302,7 +326,7 @@ void print_var_decls(VarTypes* ps) {
   int i = 0;
   for (auto iter = ps->begin(); iter != ps->end(); ++iter, ++i) {
     print_type(iter->second);
-    printf(" %s;", iter->first.c_str());
+    printf(" %s; ", iter->first.c_str());
   }
 }
 
@@ -312,9 +336,28 @@ void print_fun_def(FunDef* f) {
   print_params(f->params);
   printf(") ");
   print_type(f->return_type);
-  printf("{\n");
+  printf(" {\n");
+  printf("  ");
   print_var_decls(f->locals);
-  print_stmt(f->body);
-  printf("}");
+  printf("\n  ");
+  print_list(f->body, print_stmt, "\n  ");
+  printf("\n}");
 }
 
+char *read_file(FILE* fp)
+{
+    char *fcontent = NULL;
+    int fsize = 0;
+
+    if(fp) {
+        fseek(fp, 0, SEEK_END);
+        fsize = ftell(fp);
+        rewind(fp);
+
+        fcontent = (char*) malloc(sizeof(char) * fsize);
+        fread(fcontent, 1, fsize, fp);
+
+        fclose(fp);
+    }
+    return fcontent;
+}
