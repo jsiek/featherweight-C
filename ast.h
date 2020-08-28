@@ -55,42 +55,27 @@ Type* make_ptr_type(int lineno, Type* type);
 
 void print_type(Type*);
 
-/***** L-Values *****/
-
-enum LValueKind { Var, Deref };
-
-struct LValue {
-  int lineno;
-  LValueKind tag;
-  union {
-    string* var;
-    Exp* deref;
-  } u;
-};
-
-LValue* make_var(int lineno, string var);
-LValue* make_deref(int lineno, Exp* exp);
-void print_lvalue(LValue* lv);
-
 /***** Expressions *****/
 
-enum ExpKind { LValueExp, Int, AddrOf, PrimOp };
+enum ExpKind { Var, Deref, Int, AddrOf, PrimOp };
 enum Operator { Neg, Add, Sub, Not, And, Or, Eq };
 
 struct Exp {
   int lineno;
   ExpKind tag;
   union {
-    LValue* lvalue;
+    string* var;
+    Exp* deref;
     int integer;
-    LValue* addr_of;
+    Exp* addr_of;
     struct { Operator op; list<Exp*>* args; } prim_op;
   } u;
 };
 
-Exp* make_lval_exp(int lineno, LValue* lval);
+Exp* make_var(int lineno, string var);
+Exp* make_deref(int lineno, Exp* exp);
 Exp* make_int(int lineno, int i);
-Exp* make_addr_of(int lineno, LValue* lval);
+Exp* make_addr_of(int lineno, Exp* lval);
 Exp* make_op(int lineno, Operator op, list<Exp*>* args);
 Exp* make_unop(int lineno, enum Operator op, Exp* arg);
 Exp* make_binop(int lineno, enum Operator op, Exp* arg1, Exp* arg2);
@@ -99,36 +84,31 @@ void print_exp(Exp*);
 
 /***** Statements *****/
 
-enum StmtKind { Assign, Call, Free, IfGoto, Return };
+enum StmtKind { Assign, Call, Free, IfGoto, Label, Return, Seq };
 
 struct Stmt {
   int lineno;
   StmtKind tag;
   union {
-    struct { LValue* lhs; Exp* rhs; } assign;
-    struct { LValue* lhs; Exp* fun; list<Exp*>* args; } call;
+    struct { Exp* lhs; Exp* rhs; } assign;
+    struct { Exp* lhs; Exp* fun; list<Exp*>* args; } call;
     Exp* free;
     struct { Exp* cond; string* target; } if_goto;
     struct { string* label; Stmt* stmt; } labeled;
     Exp* ret;
+    struct { Stmt* stmt; Stmt* next; } seq;
   } u;
 };
 
-Stmt* make_assign(int lineno, LValue* lhs, Exp* rhs);
-Stmt* make_call(int lineno, LValue* lhs, Exp* fun, list<Exp*>* args);
+Stmt* make_assign(int lineno, Exp* lhs, Exp* rhs);
+Stmt* make_call(int lineno, Exp* lhs, Exp* fun, list<Exp*>* args);
 Stmt* make_free(int lineno, Exp* e);
 Stmt* make_if_goto(int lineno, Exp* cond, string target);
+Stmt* make_labeled(int lineno, string label, Stmt* stmt);
 Stmt* make_return(int lineno, Exp* e);
+Stmt* make_seq(int lineno, Stmt* s1, Stmt* s2);
 
 void print_stmt(Stmt*);
-
-/***** Declarations *****/
-
-struct Block {
-  string label;
-  list<Stmt*>* stmts;
-  Block(string l, list<Stmt*>* ss) : label(l), stmts(ss) { }
-};
 
 /***** Declarations *****/
 
@@ -138,11 +118,11 @@ struct FunDef {
   Type* return_type;
   VarTypes* params;
   VarTypes* locals;
-  list<Block*>* body;
+  Stmt* body;
 };
 
 FunDef* make_fun_def(int lineno, string name, Type* ret_type, VarTypes* params,
-                     VarTypes* locals, list<Block*>* body);
+                     VarTypes* locals, Stmt* body);
 void print_fun_def(FunDef*);
 
 #endif

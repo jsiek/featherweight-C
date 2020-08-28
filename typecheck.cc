@@ -31,25 +31,6 @@ bool type_equal(Type* t1, Type* t2) {
         && list_equal(t1->u.fun.params, t2->u.fun.params, type_equal));
 }
 
-Type* typecheck_lvalue(LValue* lval, TypeEnv* env) {
-    switch (lval->tag) {
-    case Var:
-      return lookup(env, *(lval->u.var));
-    case Deref:
-      Type* t = typecheck_exp(lval->u.deref, env);
-      switch (t->tag) {
-      case PtrT:
-        return t->u.ptr.type;
-      default:
-        printf("type error, expected a pointer in dereference");
-        exit(-1);
-        break;
-      }
-      break;
-    }
-
-}
-
 void expect_type(Type* expected, Type* actual) {
   if (! type_equal(expected, actual)) {
     printf("expected argument of type ");
@@ -63,14 +44,26 @@ void expect_type(Type* expected, Type* actual) {
 
 Type* typecheck_exp(Exp* e, TypeEnv* env) {
   switch (e->tag) {
-  case LValueExp:
-    return typecheck_lvalue(e->u.lvalue, env);
+  case Var:
+    return lookup(env, *(e->u.var));
+  case Deref: {
+    Type* t = typecheck_exp(e->u.deref, env);
+    switch (t->tag) {
+    case PtrT:
+      return t->u.ptr.type;
+    default:
+      printf("type error, expected a pointer in dereference");
+      exit(-1);
+      break;
+    }
+    break;
+  }
   case Int:
     return make_int_type(e->lineno);
     break;
   case AddrOf:
-    return make_ptr_type(e->lineno, typecheck_lvalue(e->u.addr_of, env));
-  case PrimOp:
+    return make_ptr_type(e->lineno, typecheck_exp(e->u.addr_of, env));
+  case PrimOp: {
     vector<Type*> ts;
     for (auto iter = e->u.prim_op.args->begin();
          iter != e->u.prim_op.args->end(); ++iter) {
@@ -100,19 +93,25 @@ Type* typecheck_exp(Exp* e, TypeEnv* env) {
     }
     break;
   }
+  }
 }
 
 void typecheck_stmt(Stmt* s, TypeEnv* env, Type* ret_type,
                     set<string>& labels) {
   switch (s->tag) {
+  case Seq: {
+    typecheck_stmt(s->u.seq.stmt, env, ret_type, labels);
+    typecheck_stmt(s->u.seq.next, env, ret_type, labels);
+    break;
+  }
   case Assign: {
-    Type* lhsT = typecheck_lvalue(s->u.assign.lhs, env);
+    Type* lhsT = typecheck_exp(s->u.assign.lhs, env);
     Type* rhsT = typecheck_exp(s->u.assign.rhs, env);
     expect_type(lhsT, rhsT);
     break;
   }
   case Call: {
-    Type* lhsT = typecheck_lvalue(s->u.assign.lhs, env);
+    Type* lhsT = typecheck_exp(s->u.assign.lhs, env);
     Type* funT = typecheck_exp(s->u.call.fun, env);
     if (funT->tag != FunT) {
       printf("error, expected a function in function call");
@@ -143,16 +142,17 @@ void typecheck_stmt(Stmt* s, TypeEnv* env, Type* ret_type,
     expect_type(make_bool_type(s->lineno),
                 typecheck_exp(s->u.if_goto.cond, env));
     break;
+  case Label:
+    if (labels.count(*s->u.labeled.label) > 0) {
+      printf("error, duplicate label %s\n", s->u.labeled.label->c_str());
+      exit(-1);
+    }
+    labels.insert(*s->u.labeled.label);
+    typecheck_stmt(s->u.labeled.stmt, env, ret_type, labels);
+    break;
   case Return:
     expect_type(ret_type, typecheck_exp(s->u.ret, env));
     break;
-  }
-}
-
-void typecheck_block(Block* b, TypeEnv* env, Type* return_type,
-                     set<string>& labels) {
-  for (auto i = b->stmts->begin(); i != b->stmts->end(); ++i) {
-    typecheck_stmt(*i, env, return_type, labels);
   }
 }
 
@@ -171,9 +171,7 @@ void typecheck_fun_def(FunDef* f, TypeEnv* env) {
     }
   }
   set<string> labels;
-  for (auto i = f->body->begin(); i != f->body->end(); ++i) {
-    typecheck_block(*i, env, f->return_type, labels);
-  }
+  typecheck_stmt(f->body, env, f->return_type, labels);
 }
 
 TypeEnv* top_level(list<FunDef*>* fs) {

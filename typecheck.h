@@ -4,7 +4,7 @@
 #include "ast.h"
 #include "assoc_list.h"
 
-typedef Node<string, Type*> TypeEnv;
+typedef AList<string, Type*> TypeEnv;
 
 Type* typecheck_exp(Exp*, TypeEnv*);
 void typecheck_stmt(Stmt*, TypeEnv*, Type*);

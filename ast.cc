@@ -1,6 +1,10 @@
 #include <stdio.h>
-#include <string.h>
+#include <string>
+#include <iostream>
 #include "ast.h"
+
+using std::cout;
+using std::endl;
 
 /***** Utilities *****/
 
@@ -59,44 +63,22 @@ void print_type(Type* t) {
   }
 }
 
-/***** L-Values *****/
+/***** Expressions *****/
 
-LValue* make_var(int lineno, string var) {
-  LValue* lv = new LValue();
+Exp* make_var(int lineno, string var) {
+  Exp* lv = new Exp();
   lv->lineno = lineno;
   lv->tag = Var;
   lv->u.var = new string(var);
   return lv;
 }
 
-LValue* make_deref(int lineno, Exp* exp) {
-  LValue* lv = new LValue();
+Exp* make_deref(int lineno, Exp* exp) {
+  Exp* lv = new Exp();
   lv->lineno = lineno;
   lv->tag = Deref;
   lv->u.deref = exp;
   return lv;
-}
-
-void print_lvalue(LValue* lv) {
-  switch (lv->tag) {
-  case Var:
-    printf("%s", lv->u.var->c_str());
-    break;
-  case Deref:
-    printf("*");
-    print_exp(lv->u.deref);
-    break;
-  }
-}
-
-/***** Expressions *****/
-
-Exp* make_lval_exp(int lineno, LValue* lval) {
-  Exp* e = new Exp();
-  e->lineno = lineno;
-  e->tag = LValueExp;
-  e->u.lvalue = lval;
-  return e;
 }
 
 Exp* make_int(int lineno, int i) {
@@ -107,7 +89,7 @@ Exp* make_int(int lineno, int i) {
   return e;
 }
 
-Exp* make_addr_of(int lineno, LValue* lval) {
+Exp* make_addr_of(int lineno, Exp* lval) {
   Exp* e = new Exp();
   e->lineno = lineno;
   e->tag = AddrOf;
@@ -175,15 +157,12 @@ void print_op(Operator op) {
 
 void print_exp(Exp* e) {
   switch (e->tag) {
-  case LValueExp:
-    print_lvalue(e->u.lvalue);
-    break;
   case Int:
     printf("%d", e->u.integer);
     break;
   case AddrOf:
     printf("&");
-    print_lvalue(e->u.addr_of);
+    print_exp(e->u.addr_of);
     break;
   case PrimOp:
     if (e->u.prim_op.args->size() == 0) {
@@ -200,12 +179,19 @@ void print_exp(Exp* e) {
       print_exp(*iter);
     }
     break;
+  case Var:
+    printf("%s", e->u.var->c_str());
+    break;
+  case Deref:
+    printf("*");
+    print_exp(e->u.deref);
+    break;
   }
 }
 
 /***** Statements *****/
 
-Stmt* make_assign(int lineno, LValue* lhs, Exp* rhs) {
+Stmt* make_assign(int lineno, Exp* lhs, Exp* rhs) {
   Stmt* s = new Stmt();
   s->lineno = lineno;
   s->tag = Assign;
@@ -214,7 +200,7 @@ Stmt* make_assign(int lineno, LValue* lhs, Exp* rhs) {
   return s;
 }
 
-Stmt* make_call(int lineno, LValue* lhs, Exp* fun, list<Exp*>* args) {
+Stmt* make_call(int lineno, Exp* lhs, Exp* fun, list<Exp*>* args) {
   Stmt* s = new Stmt();
   s->lineno = lineno;
   s->tag = Call;
@@ -241,6 +227,15 @@ Stmt* make_if_goto(int lineno, Exp* cond, string target)  {
   return s;
 }
 
+Stmt* make_labeled(int lineno, string label, Stmt* stmt)  {
+  Stmt* s = new Stmt();
+  s->lineno = lineno;
+  s->tag = Label;
+  s->u.labeled.label = new string(label);
+  s->u.labeled.stmt = stmt;
+  return s;
+}
+
 Stmt* make_return(int lineno, Exp* e) {
   Stmt* s = new Stmt();
   s->lineno = lineno;
@@ -249,16 +244,25 @@ Stmt* make_return(int lineno, Exp* e) {
   return s;
 }
 
+Stmt* make_seq(int lineno, Stmt* s1, Stmt* s2) {
+  Stmt* s = new Stmt();
+  s->lineno = lineno;
+  s->tag = Seq;
+  s->u.seq.stmt = s1;
+  s->u.seq.next = s2;
+  return s;
+}
+
 void print_stmt(Stmt* s) {
   switch (s->tag) {
   case Assign:
-    print_lvalue(s->u.assign.lhs);
+    print_exp(s->u.assign.lhs);
     printf(" = ");
     print_exp(s->u.assign.rhs);
     printf(";");
     break;
   case Call:
-    print_lvalue(s->u.call.lhs);
+    print_exp(s->u.call.lhs);
     printf(" = ");
     print_exp(s->u.call.fun);
     printf("(");
@@ -277,10 +281,21 @@ void print_stmt(Stmt* s) {
     printf(") goto ");
     printf("%s;", s->u.if_goto.target->c_str());
     break;
+  case Label:
+    printf("%s:\n", s->u.labeled.label->c_str());
+    print_stmt(s->u.labeled.stmt);
+    break;
   case Return:
     printf("return ");
     print_exp(s->u.ret);
     printf(";");
+    break;
+  case Seq:
+    printf("{\n");
+    print_stmt(s->u.seq.stmt);
+    cout << endl;
+    print_stmt(s->u.seq.next);
+    printf("\n}\n");
     break;
   }
 }
@@ -288,7 +303,7 @@ void print_stmt(Stmt* s) {
 /***** Declarations *****/
 
 FunDef* make_fun_def(int lineno, string name, Type* ret_type, VarTypes* params,
-                     VarTypes* locals, list<Block*>* body) {
+                     VarTypes* locals, Stmt* body) {
   FunDef* f = new FunDef();
   f->lineno = lineno;
   f->name = name;
@@ -323,19 +338,13 @@ void print_fun_def(FunDef* f) {
   print_params(f->params);
   printf(") ");
   print_type(f->return_type);
-  printf(" {\n");
+  printf("\n");
   if (f->locals->size() > 0) {
     printf("  ");
     print_var_decls(f->locals);
     printf("\n");
   }
-  for (auto i = f->body->begin(); i != f->body->end(); ++i) {
-    printf("  %s: {\n", (*i)->label.c_str());
-    printf("    ");
-    print_list((*i)->stmts, print_stmt, "\n    ");
-    printf("\n  }\n");
-  }
-  printf("}");
+  print_stmt(f->body);
 }
 
 char *read_file(FILE* fp)

@@ -35,17 +35,15 @@ static list<FunDef*> program;
    int  num;
    Type* type;
    list<Type*>* type_list;
-   LValue* lvalue;
+   Exp* lvalue;
    Exp* expr;
    list<Exp*>* expr_list;
    VarTypes* var_decls;
    VarTypes* params;
    Stmt* stmt;
-   list<Stmt*>* stmt_list;
+   Stmt* stmt_list;
    FunDef* fun_def;
    list<FunDef*>* fun_def_list;
-   Block* block;
-   list<Block*>* block_list;
 };
 
 %token <num> INT
@@ -54,8 +52,6 @@ static list<FunDef*> program;
 %type <fun_def_list> fun_def_list
 %type <stmt> stmt
 %type <stmt_list> stmt_list
-%type <block> block
-%type <block_list> block_list
 %type <lvalue> lvalue
 %type <expr> expr
 %type <expr_list> expr_list
@@ -107,7 +103,7 @@ input:
     }
     printf("\n");
     printf("type checking complete\n");
-    interp_program($1);
+    //interp_program($1);
   /*
   Type* t = typecheck($1, 0, 0);
   Value* v = eval($1, 0, 0); 
@@ -146,7 +142,7 @@ lvalue:
 | ASTR expr        { $$ = make_deref(yylineno, $2); }
 ;
 expr:
-  lvalue           { $$ = make_lval_exp(yylineno, $1); }
+  lvalue           { $$ = $1; }
 | INT              { $$ = make_int(yylineno, $1); }
 | expr EQUAL expr  { $$ = make_binop(yylineno, Eq, $1, $3); }
 | expr PLUS expr   { $$ = make_binop(yylineno, Add, $1, $3); }
@@ -171,23 +167,19 @@ stmt:
     { $$ = make_free(yylineno, $3); }
 | IF LP expr RP GOTO ID SEMICOLON
     { $$ = make_if_goto(yylineno, $3, $6); }
+| ID COLON stmt 
+    { $$ = make_labeled(yylineno, $1, $3); }
 | RETURN expr SEMICOLON
     { $$ = make_return(yylineno, $2); }
+| LC stmt_list RC { $$ = $2; }
 ;
-stmt_list:
-  /* empty */    { $$ = new list<Stmt*>(); }
-| stmt stmt_list { $$ = $2; $$->push_front($1); }
-;
-block:
-  ID COLON LC stmt_list RC { $$ = new Block($1, $4); }
-;
-block_list:
-  block { $$ = new list<Block*>(); $$->push_back($1); }
-| block block_list { $$ = $2; $$->push_back($1); }
+stmt_list :
+  stmt { $$ = $1; }
+| stmt stmt_list { $$ = make_seq(yylineno, $1, $2); }
 ;
 fun_def:
-  FUN ID LP params RP type LC var_decls block_list RC
-    { $$ = make_fun_def(yylineno, $2, $6, $4, $8, $9); }
+  FUN ID LP params RP type var_decls stmt 
+    { $$ = make_fun_def(yylineno, $2, $6, $4, $7, $8); }
 ;
 fun_def_list:
   /* empty */ { $$ = new list<FunDef*>(); }

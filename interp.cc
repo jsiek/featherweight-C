@@ -12,6 +12,8 @@ using std::endl;
 
 typedef unsigned int address;
 
+/***** Values *****/
+
 struct Value {
   TypeKind tag;
   bool alive;
@@ -47,25 +49,217 @@ Value* make_ptr_val(address addr) {
   return v;
 }
 
-typedef Node<string, address> Env;
+/***** Contexts *****/
+
+enum CtxKind { LValCtx, ExpCtx, StmtCtx, ValCtx };
+
+struct Ctx {
+  CtxKind tag;
+  union {
+    Exp* exp;   // for LValCtx and ExpCtx
+    Stmt* stmt;
+    Value* val;
+  } u;
+  
+  int pos;
+  vector<Value*> results;
+};
+
+Ctx* make_exp_ctx(Exp* e) {
+  Ctx* ctx = new Ctx();
+  ctx->tag = ExpCtx;
+  ctx->u.exp = e;
+  ctx->pos = -1;
+  return ctx;
+}
+
+Ctx* make_lval_ctx(Exp* e) {
+  Ctx* ctx = new Ctx();
+  ctx->tag = LValCtx;
+  ctx->u.exp = e;
+  ctx->pos = -1;
+  return ctx;
+}
+
+Ctx* make_stmt_ctx(Stmt* s) {
+  Ctx* ctx = new Ctx();
+  ctx->tag = StmtCtx;
+  ctx->u.stmt = s;
+  ctx->pos = -1;
+  return ctx;
+}
+
+Ctx* make_val_ctx(Value* v) {
+  Ctx* ctx = new Ctx();
+  ctx->tag = ValCtx;
+  ctx->u.val = v;
+  ctx->pos = -1;
+  return ctx;
+}
+
+typedef AList<string, address> Env;
 
 struct Frame {
   FunDef* fun;
   Env* env;
+  list<Ctx*> control;
+  Frame(FunDef* f, Env* e) : fun(f), env(e) { }
 };
 
 struct State {
   vector<Value*> heap;
-  vector<Frame*> stack;
+  list<Frame*> stack;
 };
+
+void handle_value(State* state, Ctx* val_ctx) {
+  Frame* frame = state->stack.front();
+  state->stack.pop_front();
+  Ctx* ctx = frame->control.front();
+  switch (ctx->tag) {
+  case ExpCtx: {
+    Exp* exp = ctx->u.exp;
+    switch (exp->tag) {
+    case Deref: {
+      frame->control.pop_front();
+      address a = val_ctx->u.val->u.ptr;
+      frame->control.push_front(make_val_ctx(state->heap[a]));
+    }
+    case PrimOp: {
+      ctx->results[pos] = val_ctx->u.val;
+      ctx->pos++;
+      
+      
+      break;
+    }
+    default:
+      cerr << "bad expression context in handle_value" << endl;
+    }
+    break;
+  }
+  case StmtCtx: {
+    Stmt* stmt = ctx->u.stmt;
+    switch (stmt->tag) {
+    case Return:
+      state->stack.pop_front();
+      frame = state->stack.front();
+      frame->control.push_front(val_ctx);
+      break;
+    default:
+      cerr << "unhandled statement" << endl;
+    } // switch stmt
+    break;
+  }
+  default:
+    cerr << "bad context in handle_value" << endl;
+  } // switch ctx
+}
+
+void step(State* state) {
+  Frame* frame = state->stack.front();
+  Ctx* ctx = frame->control.front();
+
+  switch (ctx->tag) {
+  case LValCtx: {
+    Exp* exp = ctx->u.exp;
+    switch (exp->tag) {
+    case Var: {
+      address a = lookup(state->stack.front()->env, *(exp->u.var));
+      Value* v = make_ptr_val(a);
+      frame->control.pop_front();
+      frame->control.push_front(make_val_ctx(v));
+      break;
+    }
+    case Deref: {
+      frame->control.pop_front();
+      frame->control.push_front(make_exp_ctx(exp->u.deref));
+      ctx->pos++;
+      break;
+    }
+    default:
+      cerr << "error, not an lvalue" << endl;
+    }
+  }
+  case ExpCtx: {
+    Exp* exp = ctx->u.exp;
+    switch (exp->tag) {
+    case Var: {
+      address a = lookup(state->stack.front()->env, *(exp->u.var));
+      Value* v = state->heap[a];
+      frame->control.pop_front();
+      frame->control.push_front(make_val_ctx(v));
+      break;
+    }
+    case Deref: {
+      frame->control.push_front(make_exp_ctx(exp->u.deref));
+      ctx->pos++;
+      break;
+    }
+    case Int:
+      frame->control.pop_front();
+      frame->control.push_front(make_val_ctx(make_int_val(exp->u.integer)));
+      break;
+    case AddrOf:
+      frame->control.pop_front();      
+      frame->control.push_front(make_lval_ctx(exp->u.addr_of));
+      ctx->pos++;
+      break;
+    case PrimOp:
+      frame->control.push_front(make_exp_ctx(exp->u.prim_op.args->front()));
+      ctx->pos++;
+      break;
+    }
+    break;
+  }
+  case StmtCtx: {
+    Stmt* stmt = ctx->u.stmt;
+    switch (stmt->tag) {
+    case Assign:
+      break;
+    case Call:
+      frame->control.push_front(make_exp_ctx(stmt->u.call.args->front()));
+      ctx->pos++;
+      break;
+    case Free:
+      break;
+    case IfGoto:
+      break;
+    case Label:
+      break;
+    case Return:
+      frame->control.pop_front();
+      frame->control.push_front(make_exp_ctx(stmt->u.ret));
+      break;
+    case Seq:
+      frame->control.pop_front();
+      frame->control.push_front(make_stmt_ctx(stmt->u.seq.next));
+      frame->control.push_front(make_stmt_ctx(stmt->u.seq.stmt));
+      break;
+    }
+    break;
+  }
+  case ValCtx:
+    handle_value(state, ctx);
+    break;
+  } // switch
+}
+
+
+
+
+#if 0
+
 
 Value* interp_exp(Exp* e, State* state);
 
 address interp_lvalue(LValue* lval, State* state) {
   switch (lval->tag) {
-  case Var:
-    return lookup(state->stack.front()->env, *(lval->u.var));
-  case Deref:
+  case Var: {
+    cout << "interp var " << *(lval->u.var) << endl;
+    address a = lookup(state->stack.front()->env, *(lval->u.var));
+    cout << "finished lookup" << endl;
+    return a;
+  }
+  case Deref: {
     Value* v = interp_exp(lval->u.deref, state);
     switch (v->tag) {
     case PtrT:
@@ -76,6 +270,7 @@ address interp_lvalue(LValue* lval, State* state) {
       cerr << "type error: dereference expected a pointer" << endl;
       exit(-1);
     }
+  }
   }
 }
 
@@ -172,15 +367,20 @@ block_iter find_block(list<Block*>* blocks, string label) {
 }
 
 int interp_blocks(list<Block*>* blocks, State* state) {
-  auto curr = find_block(blocks, "start");
-
-  while (curr != blocks->end()) {
+  for (auto curr = find_block(blocks, "start");
+       curr != blocks->end();
+       ++curr) {
     for (auto s = (*curr)->stmts->begin(); s != (*curr)->stmts->end(); ++s) {
+      cout << "interp stmt "; print_stmt(*s);  cout << endl;
       switch ((*s)->tag) {
       case Assign: {
+        cout << "interp lvalue "; print_lvalue((*s)->u.assign.lhs);cout << endl;
         address a = interp_lvalue((*s)->u.assign.lhs, state);
+        cout << "interp exp "; print_exp((*s)->u.assign.rhs); cout << endl;
         Value* v = interp_exp((*s)->u.assign.rhs, state);
+        cout << "assigning to address " << a << endl;
         state->heap[a] = v;
+        cout << "finished stmt "; print_stmt(*s);  cout << endl;
         break;
       }
       case Call: {
@@ -202,7 +402,10 @@ int interp_blocks(list<Block*>* blocks, State* state) {
         break;
       }
       case Return: {
-        Value* v = interp_exp((*s)->u.free, state);
+        cout << "interp return ";
+        print_exp((*s)->u.ret);
+        cout << endl;
+        Value* v = interp_exp((*s)->u.ret, state);
         return val_to_int(v);
       }
       }
@@ -221,6 +424,12 @@ void interp_program(list<FunDef*>* fs) {
       main = *iter;
   }
   State* initial = new State();
+
+  Env* = 0;
+
+  
+  Frame* f = new Frame(main, env);
+  
   for (auto p = main->params->begin(); p != main->params->end(); ++p) {
     address a = initial->heap.size();
     initial->heap.push_back(0);
@@ -230,3 +439,4 @@ void interp_program(list<FunDef*>* fs) {
   int ret = interp_blocks(main->body, initial);
   cout << "result: " << ret << endl;
 }
+#endif
