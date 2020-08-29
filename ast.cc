@@ -102,7 +102,7 @@ Exp* make_op(int lineno, enum Operator op, list<Exp*>* args) {
   e->lineno = lineno;
   e->tag = PrimOp;
   e->u.prim_op.op = op;
-  e->u.prim_op.args = args;
+  e->u.prim_op.args = new vector<Exp*>(args->begin(), args->end());
   return e;
 }
 
@@ -111,8 +111,8 @@ Exp* make_unop(int lineno, enum Operator op, Exp* arg) {
   e->lineno = lineno;
   e->tag = PrimOp;
   e->u.prim_op.op = op;
-  list<Exp*>* args = new list<Exp*>();
-  args->push_front(arg);
+  vector<Exp*>* args = new vector<Exp*>();
+  args->push_back(arg);
   e->u.prim_op.args = args;
   return e;
 }
@@ -122,9 +122,9 @@ Exp* make_binop(int lineno, enum Operator op, Exp* arg1, Exp* arg2) {
   e->lineno = lineno;
   e->tag = PrimOp;
   e->u.prim_op.op = op;
-  list<Exp*>* args = new list<Exp*>();
-  args->push_front(arg2);
-  args->push_front(arg1);
+  vector<Exp*>* args = new vector<Exp*>();
+  args->push_back(arg1);
+  args->push_back(arg2);
   e->u.prim_op.args = args;
   return e;
 }

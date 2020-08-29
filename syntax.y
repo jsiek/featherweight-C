@@ -1,6 +1,7 @@
 %{
 #include <stdlib.h>
 #include <stdio.h>
+#include <iostream>
 #include <stdarg.h>
 #include "ast.h"
 #include "typecheck.h"
@@ -26,6 +27,8 @@ extern int yywrap();
 using std::list;
 using std::pair;
 using std::make_pair;
+using std::cout;
+using std::endl;
   
 static list<FunDef*> program;
 %}
@@ -103,7 +106,9 @@ input:
     }
     printf("\n");
     printf("type checking complete\n");
-    //interp_program($1);
+    int result = interp_program($1);
+    cout << "result: " << result << endl;
+    
   /*
   Type* t = typecheck($1, 0, 0);
   Value* v = eval($1, 0, 0); 

@@ -4,9 +4,11 @@
 #include <stdlib.h>
 #include <string>
 #include <list>
+#include <vector>
 
 using std::string;
 using std::list;
+using std::vector;
 using std::pair;
 
 /***** Utilities *****/
@@ -68,7 +70,7 @@ struct Exp {
     Exp* deref;
     int integer;
     Exp* addr_of;
-    struct { Operator op; list<Exp*>* args; } prim_op;
+    struct { Operator op; vector<Exp*>* args; } prim_op;
   } u;
 };
 

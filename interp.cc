@@ -111,6 +111,62 @@ struct State {
   list<Frame*> stack;
 };
 
+int val_to_int(Value* v) {
+  switch (v->tag) {
+  case IntT:
+    return v->u.integer;
+  default:
+    cerr << "type error, expected an integer" << endl;
+    exit(-1);
+  }
+}
+
+int val_to_bool(Value* v) {
+  switch (v->tag) {
+  case BoolT:
+    return v->u.boolean;
+  default:
+    cerr << "type error, expected a Boolean" << endl;
+    exit(-1);
+  }
+}
+
+address val_to_ptr(Value* v) {
+  switch (v->tag) {
+  case PtrT:
+    return v->u.ptr;
+  default:
+    cerr << "type error, expected a pointer" << endl;
+    exit(-1);
+  }
+}
+
+bool val_equal(Value* v1, Value* v2) {
+  return (v1->tag == IntT && v2->tag == IntT && v1->u.integer == v2->u.integer)
+    || (v1->tag == BoolT && v2->tag == BoolT && v1->u.boolean == v2->u.boolean)
+    || (v1->tag == PtrT && v2->tag == PtrT && v1->u.ptr == v2->u.ptr)
+    || (v1->tag == FunT && v2->tag == FunT && v1->u.fun == v2->u.fun);
+}
+
+Value* eval_prim(Operator op, const vector<Value*>& args) {
+  switch (op) {
+  case Neg:
+    return make_int_val(- val_to_int(args[0]));
+  case Add:
+    return make_int_val(val_to_int(args[0]) + val_to_int(args[1]));
+  case Sub:
+    return make_int_val(val_to_int(args[0]) - val_to_int(args[1]));
+  case Not:
+    return make_bool_val(- val_to_bool(args[0]));
+  case And:
+    return make_bool_val(val_to_bool(args[0]) && val_to_bool(args[1]));
+  case Or:
+    return make_bool_val(val_to_bool(args[0]) || val_to_bool(args[1]));
+  case Eq:
+    return make_bool_val(val_equal(args[0], args[1]));
+  }
+}
+
 void handle_value(State* state, Ctx* val_ctx) {
   Frame* frame = state->stack.front();
   state->stack.pop_front();
@@ -125,10 +181,16 @@ void handle_value(State* state, Ctx* val_ctx) {
       frame->control.push_front(make_val_ctx(state->heap[a]));
     }
     case PrimOp: {
-      ctx->results[pos] = val_ctx->u.val;
+      ctx->results[ctx->pos] = val_ctx->u.val;
       ctx->pos++;
-      
-      
+      if (ctx->pos != exp->u.prim_op.args->size()) {
+        Exp* arg = (*exp->u.prim_op.args)[ctx->pos];
+        frame->control.push_front(make_exp_ctx(arg));
+      } else {
+        frame->control.pop_front();
+        Value* v = eval_prim(exp->u.prim_op.op, ctx->results);
+        frame->control.push_front(make_val_ctx(v));
+      }
       break;
     }
     default:
@@ -214,16 +276,20 @@ void step(State* state) {
     Stmt* stmt = ctx->u.stmt;
     switch (stmt->tag) {
     case Assign:
+      cerr << "step assign not implemented" << endl;
       break;
     case Call:
       frame->control.push_front(make_exp_ctx(stmt->u.call.args->front()));
       ctx->pos++;
       break;
     case Free:
+      cerr << "step free not implemented" << endl;
       break;
     case IfGoto:
+      cerr << "step if_goto not implemented" << endl;
       break;
     case Label:
+      cerr << "step label not implemented" << endl;
       break;
     case Return:
       frame->control.pop_front();
@@ -243,6 +309,36 @@ void step(State* state) {
   } // switch
 }
 
+int interp_program(list<FunDef*>* fs) {
+  // Find the main function.
+  FunDef* main = 0;
+  for (auto iter = fs->begin(); iter != fs->end(); ++iter) {
+    if ((*iter)->name == string("main")) {
+      main = *iter;
+    }
+  }
+  State* state = new State();
+  
+  Env* env = 0;
+  
+  // Allocate the local variables for the main function
+  for (auto l = main->locals->begin(); l != main->locals->end(); ++l) {
+    address a = state->heap.size();
+    state->heap.push_back(0);
+    env = new Env((*l).first, a, env);
+  }
+  
+  Frame* f = new Frame(main, env);
+  f->control.push_front(make_stmt_ctx(main->body));
+  state->stack.push_front(f);
+  
+  while (state->stack.size() > 1
+         || state->stack.front()->control.front()->tag != ValCtx) {
+    step(state);
+  }
+  Value* v = state->stack.front()->control.front()->u.val;
+  return val_to_int(v);
+}
 
 
 
@@ -274,61 +370,6 @@ address interp_lvalue(LValue* lval, State* state) {
   }
 }
 
-int val_to_int(Value* v) {
-  switch (v->tag) {
-  case IntT:
-    return v->u.integer;
-  default:
-    cerr << "type error, expected an integer" << endl;
-    exit(-1);
-  }
-}
-
-int val_to_bool(Value* v) {
-  switch (v->tag) {
-  case BoolT:
-    return v->u.boolean;
-  default:
-    cerr << "type error, expected a Boolean" << endl;
-    exit(-1);
-  }
-}
-
-address val_to_ptr(Value* v) {
-  switch (v->tag) {
-  case PtrT:
-    return v->u.ptr;
-  default:
-    cerr << "type error, expected a pointer" << endl;
-    exit(-1);
-  }
-}
-
-bool val_equal(Value* v1, Value* v2) {
-  return (v1->tag == IntT && v2->tag == IntT && v1->u.integer == v2->u.integer)
-    || (v1->tag == BoolT && v2->tag == BoolT && v1->u.boolean == v2->u.boolean)
-    || (v1->tag == PtrT && v2->tag == PtrT && v1->u.ptr == v2->u.ptr)
-    || (v1->tag == FunT && v2->tag == FunT && v1->u.fun == v2->u.fun);
-}
-
-Value* eval_prim(Operator op, const vector<Value*>& args) {
-  switch (op) {
-  case Neg:
-    return make_int_val(- val_to_int(args[0]));
-  case Add:
-    return make_int_val(val_to_int(args[0]) + val_to_int(args[1]));
-  case Sub:
-    return make_int_val(val_to_int(args[0]) - val_to_int(args[1]));
-  case Not:
-    return make_bool_val(- val_to_bool(args[0]));
-  case And:
-    return make_bool_val(val_to_bool(args[0]) && val_to_bool(args[1]));
-  case Or:
-    return make_bool_val(val_to_bool(args[0]) || val_to_bool(args[1]));
-  case Eq:
-    return make_bool_val(val_equal(args[0], args[1]));
-  }
-}
 
 Value* interp_exp(Exp* e, State* state) {
   switch (e->tag) {
@@ -417,26 +458,4 @@ int interp_blocks(list<Block*>* blocks, State* state) {
   exit(-1);
 }
 
-void interp_program(list<FunDef*>* fs) {
-  FunDef* main = 0;
-  for (auto iter = fs->begin(); iter != fs->end(); ++iter) {
-    if ((*iter)->name == string("main"))
-      main = *iter;
-  }
-  State* initial = new State();
-
-  Env* = 0;
-
-  
-  Frame* f = new Frame(main, env);
-  
-  for (auto p = main->params->begin(); p != main->params->end(); ++p) {
-    address a = initial->heap.size();
-    initial->heap.push_back(0);
-    initial->stack.front()->env =
-      new Env((*p).first, a, initial->stack.front()->env);
-  }
-  int ret = interp_blocks(main->body, initial);
-  cout << "result: " << ret << endl;
-}
 #endif
