@@ -3,6 +3,7 @@
 #include <iostream>
 #include "interp.h"
 #include "assoc_list.h"
+#include "const_list.h"
 
 using std::vector;
 using std::map;
@@ -206,6 +207,9 @@ void handle_value(State* state, Ctx* val_ctx) {
       frame = state->stack.front();
       frame->control.push_front(val_ctx);
       break;
+    case Label:
+      frame->control.pop_front();
+      break;
     default:
       cerr << "unhandled statement" << endl;
     } // switch stmt
@@ -214,6 +218,32 @@ void handle_value(State* state, Ctx* val_ctx) {
   default:
     cerr << "bad context in handle_value" << endl;
   } // switch ctx
+}
+
+
+bool goto_label(string label, Stmt* stmt, list<Ctx*>& control) {
+  switch (stmt->tag) {
+  case Label: {
+    if (*(stmt->u.labeled.label) == label) {
+      control.clear();
+      control.push_front(make_stmt_ctx(stmt->u.labeled.stmt));
+      return true;
+    } else {
+      control.push_front(make_stmt_ctx(stmt));
+      return goto_label(label, stmt->u.labeled.stmt, control);
+    }
+  }
+  case Seq: {
+    control.push_front(make_stmt_ctx(stmt));
+    if (goto_label(label, stmt->u.seq.stmt, control)) {
+      return true;
+    } else {
+      return goto_label(label, stmt->u.seq.next, control);
+    }
+  }
+  default:
+    return false;
+  } // switch (stmt->tag)
 }
 
 void step(State* state) {
@@ -327,11 +357,13 @@ int interp_program(list<FunDef*>* fs) {
     state->heap.push_back(0);
     env = new Env((*l).first, a, env);
   }
-  
+
+  // Create the frame for the call to main and push it on the stack
   Frame* f = new Frame(main, env);
   f->control.push_front(make_stmt_ctx(main->body));
   state->stack.push_front(f);
-  
+
+  // Run the program
   while (state->stack.size() > 1
          || state->stack.front()->control.front()->tag != ValCtx) {
     step(state);

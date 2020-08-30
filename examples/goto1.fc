@@ -1,0 +1,14 @@
+fun main () int 
+  int x;
+{
+ start:
+  x = 1;        
+ loop:          
+  if (x == 0)   
+    goto end;   
+  x = x - 1;   
+  if (true) 
+    goto loop;
+ end:
+  return x;
+}
