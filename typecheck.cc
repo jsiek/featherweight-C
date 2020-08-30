@@ -93,6 +93,24 @@ Type* typecheck_exp(Exp* e, TypeEnv* env) {
     }
     break;
   }
+  case Call: {
+    Type* funT = typecheck_exp(e->u.call.fun, env);
+    if (funT->tag != FunT) {
+      printf("error, expected a function in function call");
+      exit(-1);
+    }
+    if (e->u.call.args->size() != funT->u.fun.params->size()) {
+      printf("error, wrong number of arguments in function call\n");
+      exit(-1);
+    }
+    auto param_iter = funT->u.fun.params->begin();
+    for (auto arg_iter = e->u.call.args->begin();
+         arg_iter != e->u.call.args->end(); ++arg_iter, ++param_iter) {
+      expect_type(*param_iter, typecheck_exp(*arg_iter, env));
+    }
+    return funT->u.fun.ret;
+    break;
+    }
   }
 }
 
@@ -110,24 +128,6 @@ void typecheck_stmt(Stmt* s, TypeEnv* env, Type* ret_type,
     expect_type(lhsT, rhsT);
     break;
   }
-  case Call: {
-    Type* lhsT = typecheck_exp(s->u.assign.lhs, env);
-    Type* funT = typecheck_exp(s->u.call.fun, env);
-    if (funT->tag != FunT) {
-      printf("error, expected a function in function call");
-      exit(-1);
-    }
-    if (s->u.call.args->size() != funT->u.fun.params->size()) {
-      printf("error, wrong number of arguments in function call\n");
-      exit(-1);
-    }
-    auto param_iter = funT->u.fun.params->begin();
-    for (auto arg_iter = s->u.call.args->begin();
-         arg_iter != s->u.call.args->end(); ++arg_iter, ++param_iter) {
-      expect_type(*param_iter, typecheck_exp(*arg_iter, env));
-    }
-    break;
-    }
   case Free: {
     switch (typecheck_exp(s->u.free, env)->tag) {
     case PtrT:

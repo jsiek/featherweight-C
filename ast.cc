@@ -129,6 +129,15 @@ Exp* make_binop(int lineno, enum Operator op, Exp* arg1, Exp* arg2) {
   return e;
 }
 
+Exp* make_call(int lineno, Exp* fun, list<Exp*>* args) {
+  Exp* s = new Exp();
+  s->lineno = lineno;
+  s->tag = Call;
+  s->u.call.fun = fun;
+  s->u.call.args = new vector<Exp*>(args->begin(), args->end());
+  return s;
+}
+
 void print_op(Operator op) {
   switch (op) {
   case Neg:
@@ -186,6 +195,12 @@ void print_exp(Exp* e) {
     printf("*");
     print_exp(e->u.deref);
     break;
+  case Call:
+    print_exp(e->u.call.fun);
+    printf("(");
+    print_vector(e->u.call.args, print_exp, ", ");
+    printf(")");
+    break;
   }
 }
 
@@ -197,16 +212,6 @@ Stmt* make_assign(int lineno, Exp* lhs, Exp* rhs) {
   s->tag = Assign;
   s->u.assign.lhs = lhs;
   s->u.assign.rhs = rhs;
-  return s;
-}
-
-Stmt* make_call(int lineno, Exp* lhs, Exp* fun, list<Exp*>* args) {
-  Stmt* s = new Stmt();
-  s->lineno = lineno;
-  s->tag = Call;
-  s->u.call.lhs = lhs;
-  s->u.call.fun = fun;
-  s->u.call.args = new vector<Exp*>(args->begin(), args->end());
   return s;
 }
 
@@ -259,15 +264,6 @@ void print_stmt(Stmt* s) {
     print_exp(s->u.assign.lhs);
     printf(" = ");
     print_exp(s->u.assign.rhs);
-    printf(";");
-    break;
-  case Call:
-    print_exp(s->u.call.lhs);
-    printf(" = ");
-    print_exp(s->u.call.fun);
-    printf("(");
-    print_vector(s->u.call.args, print_exp, ", ");
-    printf(")");
     printf(";");
     break;
   case Free:
@@ -338,13 +334,14 @@ void print_fun_def(FunDef* f) {
   print_params(f->params);
   printf(") ");
   print_type(f->return_type);
-  printf("\n");
+  printf(" {\n");
   if (f->locals->size() > 0) {
     printf("  ");
     print_var_decls(f->locals);
     printf("\n");
   }
   print_stmt(f->body);
+  printf("\n}");
 }
 
 char *read_file(FILE* fp)

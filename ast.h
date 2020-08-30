@@ -69,7 +69,7 @@ void print_type(Type*);
 
 /***** Expressions *****/
 
-enum ExpKind { Var, Deref, Int, AddrOf, PrimOp };
+enum ExpKind { Var, Deref, Int, AddrOf, PrimOp, Call };
 enum Operator { Neg, Add, Sub, Not, And, Or, Eq };
 
 struct Exp {
@@ -81,6 +81,7 @@ struct Exp {
     int integer;
     Exp* addr_of;
     struct { Operator op; vector<Exp*>* args; } prim_op;
+    struct { Exp* fun; vector<Exp*>* args; } call;
   } u;
 };
 
@@ -91,19 +92,19 @@ Exp* make_addr_of(int lineno, Exp* lval);
 Exp* make_op(int lineno, Operator op, list<Exp*>* args);
 Exp* make_unop(int lineno, enum Operator op, Exp* arg);
 Exp* make_binop(int lineno, enum Operator op, Exp* arg1, Exp* arg2);
+Exp* make_call(int lineno, Exp* fun, list<Exp*>* args);
   
 void print_exp(Exp*);
 
 /***** Statements *****/
 
-enum StmtKind { Assign, Call, Free, IfGoto, Label, Return, Seq };
+enum StmtKind { Assign, Free, IfGoto, Label, Return, Seq };
 
 struct Stmt {
   int lineno;
   StmtKind tag;
   union {
     struct { Exp* lhs; Exp* rhs; } assign;
-    struct { Exp* lhs; Exp* fun; vector<Exp*>* args; } call;
     Exp* free;
     struct { Exp* cond; string* target; } if_goto;
     struct { string* label; Stmt* stmt; } labeled;
@@ -113,7 +114,6 @@ struct Stmt {
 };
 
 Stmt* make_assign(int lineno, Exp* lhs, Exp* rhs);
-Stmt* make_call(int lineno, Exp* lhs, Exp* fun, list<Exp*>* args);
 Stmt* make_free(int lineno, Exp* e);
 Stmt* make_if_goto(int lineno, Exp* cond, string target);
 Stmt* make_labeled(int lineno, string label, Stmt* stmt);

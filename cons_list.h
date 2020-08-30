@@ -13,5 +13,14 @@ Cons<T>* cons(const T& x, Cons<T>* ls) {
   return new Cons<T>(x, ls);
 }
 
+template<class T>
+unsigned int length(Cons<T>* ls) {
+  if (ls) {
+    return 1 + length(ls->next);
+  } else {
+    return 0;
+  }
+}
+         
 
 #endif

@@ -157,6 +157,7 @@ expr:
 | NOT expr         { $$ = make_unop(yylineno, Not, $2); }
 | MINUS expr       { $$ = make_unop(yylineno, Neg, $2); }
 | LP expr RP       { $$ = $2; }
+| expr LP expr_list RP { $$ = make_call(yylineno, $1, $3); }
 ;
 expr_list:
   /* empty */          { $$ = new list<Exp*>(); }
@@ -166,8 +167,6 @@ expr_list:
 stmt:
   lvalue ASSGN expr SEMICOLON
     { $$ = make_assign(yylineno, $1, $3); }
-| lvalue ASSGN expr LP expr_list RP SEMICOLON
-    { $$ = make_call(yylineno, $1, $3, $5); }
 | FREE LP expr RP SEMICOLON
     { $$ = make_free(yylineno, $3); }
 | IF LP expr RP GOTO ID SEMICOLON
@@ -183,8 +182,8 @@ stmt_list :
 | stmt stmt_list { $$ = make_seq(yylineno, $1, $2); }
 ;
 fun_def:
-  FUN ID LP params RP type var_decls stmt 
-    { $$ = make_fun_def(yylineno, $2, $6, $4, $7, $8); }
+  FUN ID LP params RP type LC var_decls stmt RC
+    { $$ = make_fun_def(yylineno, $2, $6, $4, $8, $9); }
 ;
 fun_def_list:
   /* empty */ { $$ = new list<FunDef*>(); }

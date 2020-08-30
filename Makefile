@@ -1,4 +1,4 @@
-a.out: syntax.l syntax.y ast.h ast.cc typecheck.cc interp.cc
+a.out: syntax.l syntax.y ast.h ast.cc typecheck.cc interp.cc cons_list.h assoc_list.h
 	bison -d syntax.y
 	flex syntax.l
 	bison -v --debug syntax.y  -o syntax.tab.cc

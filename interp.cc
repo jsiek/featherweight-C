@@ -26,6 +26,23 @@ struct Value {
   } u;
 };
 
+void print_val(Value* val) {
+  switch (val->tag) {
+  case IntT:
+    cout << val->u.integer;
+    break;
+  case BoolT:
+    cout << val->u.boolean;
+    break;
+  case FunT:
+    cout << "fun<" << val->u.fun->name << ">";
+    break;
+  case PtrT:
+    cout << "ptr<" << val->u.ptr << ">";
+    break;
+  }
+}
+
 Value* make_int_val(int i) {
   Value* v = new Value();
   v->tag = IntT; v->alive = true; v->u.integer = i;
@@ -65,6 +82,37 @@ struct Ctx {
   int pos;
   vector<Value*> results;
 };
+
+void print_ctx(Ctx* ctx) {
+  switch (ctx->tag) {
+  case LValCtx:
+  case ExpCtx:
+    print_exp(ctx->u.exp);
+    break;
+  case StmtCtx:
+    print_stmt(ctx->u.stmt);
+    break;
+  case ValCtx:
+    print_val(ctx->u.val);
+    break;
+  }
+  cout << "[" << ctx->pos << "]";
+  for (auto iter = ctx->results.begin(); iter != ctx->results.end(); ++iter) {
+    if (*iter)
+      print_val(*iter);
+    cout << ",";
+  }
+}
+
+void print_ctx_list(Cons<Ctx*>* ls) {
+  if (ls) {
+    print_ctx(ls->curr);
+    if (ls->next) {
+      cout << " :: ";
+      print_ctx_list(ls->next);
+    }
+  }
+}
 
 Ctx* make_exp_ctx(Exp* e) {
   Ctx* ctx = new Ctx();
@@ -108,6 +156,14 @@ struct Frame {
   Frame(FunDef* f, Env* e, Cons<Ctx*>* c) : fun(f), env(e), control(c) { }
 };
 
+void print_frame(Frame* frame) {
+  if (frame->fun)
+    cout << frame->fun->name;
+  cout << "{";
+  print_ctx_list(frame->control);
+  cout << "}"; 
+}
+
 // { S, H }
 struct State {
   Cons<Frame*>* stack;
@@ -115,12 +171,42 @@ struct State {
   list<FunDef*>* funs;
 };
 
+void print_stack(Cons<Frame*>* ls) {
+  if (ls) {
+    print_frame(ls->curr);
+    if (ls->next) {
+      cout << " :: ";
+      print_stack(ls->next);
+    }
+  }
+}
+
+void print_heap(vector<Value*>& heap) {
+  for (auto iter = heap.begin(); iter != heap.end(); ++iter) {
+    if (*iter) {
+      print_val(*iter);
+    } else {
+        cout << "_";
+    }
+      cout << ", ";
+  }
+}
+
+void print_state(State* state) {
+  cout << "{" << endl;
+  cout << "stack: ";
+  print_stack(state->stack);
+  cout << endl << "heap: ";
+  print_heap(state->heap);
+  cout << endl << "}" << endl;
+}
+
 int val_to_int(Value* v) {
   switch (v->tag) {
   case IntT:
     return v->u.integer;
   default:
-    cerr << "type error, expected an integer" << endl;
+    cerr << "runtime type error: expected an integer" << endl;
     exit(-1);
   }
 }
@@ -130,7 +216,7 @@ int val_to_bool(Value* v) {
   case BoolT:
     return v->u.boolean;
   default:
-    cerr << "type error, expected a Boolean" << endl;
+    cerr << "runtime type error: expected a Boolean" << endl;
     exit(-1);
   }
 }
@@ -140,7 +226,7 @@ address val_to_ptr(Value* v) {
   case PtrT:
     return v->u.ptr;
   default:
-    cerr << "type error, expected a pointer" << endl;
+    cerr << "runtime type error: expected a pointer" << endl;
     exit(-1);
   }
 }
@@ -150,7 +236,7 @@ FunDef* val_to_fun(Value* v) {
   case FunT:
     return v->u.fun;
   default:
-    cerr << "type error, expected a pointer" << endl;
+    cerr << "runtime type error: expected a function" << endl;
     exit(-1);
   }
 }
@@ -248,7 +334,11 @@ void handle_value(State* state) {
   Frame* frame = state->stack->curr;
   Ctx* val_ctx = frame->control->curr;
   Ctx* ctx = frame->control->next->curr;
-  ctx->results[ctx->pos] = val_ctx->u.val;
+  
+  cout << "handle value "; print_val(val_ctx->u.val);
+  cout << " in context "; print_ctx(ctx); cout << endl;
+  
+  ctx->results.push_back(val_ctx->u.val);
   ctx->pos++;
              
   switch (ctx->tag) {
@@ -276,6 +366,29 @@ void handle_value(State* state) {
       }
       break;
     }
+    case Call: {
+      if (ctx->pos == 1 + exp->u.call.args->size()) {
+        //    { { v :: lhs = f(vs,[]) :: C, E, F} :: S, H}
+        // -> { {C',E',F'} :: {(x = []) :: C, E, F} :: S, H}
+        frame->control = frame->control->next->next;
+        call_function(ctx->results, state);
+      } else if (ctx->pos == 1) {
+        //    { { v :: [](e,es) :: C, E, F} :: S, H}
+        // -> { { e :: v([],es) :: C, E, F} :: S, H}
+        if (exp->u.call.args->size() > 0) {
+          frame->control = cons(make_exp_ctx((*exp->u.call.args)[0]),
+                                frame->control->next);
+        } else {
+          
+        }
+      } else {
+        //    { { v :: call(f, (vs,[],e,es)) :: C, E, F} :: S, H}
+        // -> { { e :: call(f, (vs,v,[],es)) :: C, E, F} :: S, H}
+        frame->control = cons(make_exp_ctx((*exp->u.call.args)[ctx->pos - 1]),
+                              frame->control->next);
+      }
+      break;
+    }
     default:
       cerr << "bad expression context in handle_value" << endl;
     }
@@ -297,24 +410,6 @@ void handle_value(State* state) {
         Value* v = ctx->results[1];
         state->heap[val_to_ptr(a)] = v;
         frame->control = frame->control->next->next;
-      }
-      break;
-    case Call:
-      if (ctx->pos == 1) {
-        //    { { v :: call([],(e,es)) :: C, E, F} :: S, H}
-        // -> { { e :: call(v, ([],es)) :: C, E, F} :: S, H}
-        frame->control = cons(make_exp_ctx((*stmt->u.call.args)[0]),
-                              frame->control->next);
-      } else if (ctx->pos != 1 + stmt->u.call.args->size()) {
-        //    { { v :: call(f, (vs,[],e,es)) :: C, E, F} :: S, H}
-        // -> { { e :: call(f, (vs,v,[],es)) :: C, E, F} :: S, H}
-        frame->control = cons(make_exp_ctx((*stmt->u.call.args)[ctx->pos - 1]),
-                              frame->control->next);
-      } else {
-        //    { { v :: call(f, (vs,[])) :: C, E, F} :: S, H}
-        // -> { {C',E',F'} :: {C, E, F} :: S, H}
-        frame->control = frame->control->next->next;
-        call_function(ctx->results, state);
       }
       break;
     case IfGoto:
@@ -350,6 +445,7 @@ void step_lvalue(State* state) {
   Frame* frame = state->stack->curr;
   Ctx* ctx = frame->control->curr;
   Exp* exp = ctx->u.exp;
+  cout << "step lvalue "; print_exp(exp); cout << endl;
   switch (exp->tag) {
   case Var: {
     // { {x :: C, E, F} :: S, H} -> { {E(x) :: C, E, F} :: S, H}
@@ -374,6 +470,7 @@ void step_exp(State* state) {
   Frame* frame = state->stack->curr;
   Ctx* ctx = frame->control->curr;
   Exp* exp = ctx->u.exp;
+  cout << "step exp "; print_exp(exp); cout << endl;
   switch (exp->tag) {
   case Var: {
     // { {x :: C, E, F} :: S, H} -> { {H(E(x)) :: C, E, F} :: S, H}
@@ -407,6 +504,13 @@ void step_exp(State* state) {
                           frame->control);
     ctx->pos++;
     break;
+  case Call:
+    //    { {e(es) :: C, E, F} :: S, H}
+    // -> { {e :: [](es) :: C, E, F} :: S, H}
+    frame->control = cons(make_exp_ctx(exp->u.call.fun),
+                          frame->control);
+    ctx->pos++;
+    break;
   }
 }
 
@@ -414,18 +518,12 @@ void step_stmt(State* state) {
   Frame* frame = state->stack->curr;
   Ctx* ctx = frame->control->curr;
   Stmt* stmt = ctx->u.stmt;
+  cout << "step stmt "; print_stmt(stmt); cout << endl;
   switch (stmt->tag) {
   case Assign:
     //    { {(lv = e) :: C, E, F} :: S, H}
     // -> { {lv :: ([] = e) :: C, E, F} :: S, H}
     frame->control = cons(make_lval_ctx(stmt->u.assign.lhs),
-                          frame->control);
-    ctx->pos++;
-    break;
-  case Call:
-    //    { {call(e, es) :: C, E, F} :: S, H}
-    // -> { {e :: call([],es) :: C, E, F} :: S, H}
-    frame->control = cons(make_exp_ctx(stmt->u.call.fun),
                           frame->control);
     ctx->pos++;
     break;
@@ -486,13 +584,21 @@ int interp_program(list<FunDef*>* fs) {
   state->funs = fs;
 
   Env* env = global_functions(state);
-  Frame* frame = new Frame(0, env, 0);
+  address a = state->heap.size();
+  state->heap.push_back(0);
+
+  Exp* call_main = make_call(0, make_var(0, "main"), new list<Exp*>());
+  Cons<Ctx*>* control = cons(make_exp_ctx(call_main), (Cons<Ctx*>*)0);
+  Frame* frame = new Frame(0, env, control);
   state->stack = cons(frame, (Cons<Frame*>*)0);
 
+  print_state(state);
   // Run the program
-  while (state->stack->next != 0
+  while (length(state->stack) > 1
+         || length(state->stack->curr->control) > 1
          || state->stack->curr->control->curr->tag != ValCtx) {
     step(state);
+    print_state(state);
   }
   Value* v = state->stack->curr->control->curr->u.val;
   return val_to_int(v);
