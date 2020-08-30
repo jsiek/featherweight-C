@@ -23,6 +23,16 @@ void print_list(list<T*>* ts, void(*printer)(T*), const char* sep) {
   }
 }
 
+template<class T>
+void print_vector(vector<T*>* ts, void(*printer)(T*), const char* sep) {
+  int i = 0;
+  for (auto iter = ts->begin(); iter != ts->end(); ++iter, ++i) {
+    if (i != 0)
+      printf("%s", sep);
+    printer(*iter);
+  }
+}
+
 char *read_file(FILE* fp);
 
 extern char* input;
@@ -93,7 +103,7 @@ struct Stmt {
   StmtKind tag;
   union {
     struct { Exp* lhs; Exp* rhs; } assign;
-    struct { Exp* lhs; Exp* fun; list<Exp*>* args; } call;
+    struct { Exp* lhs; Exp* fun; vector<Exp*>* args; } call;
     Exp* free;
     struct { Exp* cond; string* target; } if_goto;
     struct { string* label; Stmt* stmt; } labeled;

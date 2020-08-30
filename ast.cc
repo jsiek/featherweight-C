@@ -206,7 +206,7 @@ Stmt* make_call(int lineno, Exp* lhs, Exp* fun, list<Exp*>* args) {
   s->tag = Call;
   s->u.call.lhs = lhs;
   s->u.call.fun = fun;
-  s->u.call.args = args;
+  s->u.call.args = new vector<Exp*>(args->begin(), args->end());
   return s;
 }
 
@@ -266,7 +266,7 @@ void print_stmt(Stmt* s) {
     printf(" = ");
     print_exp(s->u.call.fun);
     printf("(");
-    print_list(s->u.call.args, print_exp, ", ");
+    print_vector(s->u.call.args, print_exp, ", ");
     printf(")");
     printf(";");
     break;
