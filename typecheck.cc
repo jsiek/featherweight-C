@@ -31,13 +31,13 @@ bool type_equal(Type* t1, Type* t2) {
         && list_equal(t1->u.fun.params, t2->u.fun.params, type_equal));
 }
 
-void expect_type(Type* expected, Type* actual) {
+void expect_type(string context, Type* expected, Type* actual) {
   if (! type_equal(expected, actual)) {
-    printf("expected argument of type ");
+    cerr << "in " << context << ", expected type ";
     print_type(expected);
-    printf(" but got argument of type ");
+    cerr << " but got type ";
     print_type(actual);
-    printf("\n");
+    cerr << endl;
     exit(-1);
   }
 }
@@ -56,7 +56,7 @@ Type* typecheck_exp(Exp* e, TypeEnv* env) {
     case PtrT:
       return t->u.ptr.type;
     default:
-      printf("type error, expected a pointer in dereference");
+      cerr << "type error, expected a pointer in dereference" << endl;
       exit(-1);
       break;
     }
@@ -78,24 +78,27 @@ Type* typecheck_exp(Exp* e, TypeEnv* env) {
     }
     switch (e->u.prim_op.op) {
     case Neg:
-      expect_type(make_int_type(e->lineno), ts[0]);
+      expect_type("negation", make_int_type(e->lineno), ts[0]);
       return make_int_type(e->lineno);
     case Add:
     case Sub:
-      expect_type(make_int_type(e->lineno), ts[0]);
-      expect_type(make_int_type(e->lineno), ts[1]);
+      expect_type("subtraction(1)", make_int_type(e->lineno), ts[0]);
+      expect_type("substration(2)", make_int_type(e->lineno), ts[1]);
       return make_int_type(e->lineno);
     case And:
+      expect_type("&&(1)", make_bool_type(e->lineno), ts[0]);
+      expect_type("&&(2)", make_bool_type(e->lineno), ts[1]);
+      return make_bool_type(e->lineno);
     case Or:
-      expect_type(make_bool_type(e->lineno), ts[0]);
-      expect_type(make_bool_type(e->lineno), ts[1]);
+      expect_type("||(1)", make_bool_type(e->lineno), ts[0]);
+      expect_type("||(2)", make_bool_type(e->lineno), ts[1]);
       return make_bool_type(e->lineno);
     case Not:
-      expect_type(make_bool_type(e->lineno), ts[0]);
+      expect_type("!", make_bool_type(e->lineno), ts[0]);
       return make_bool_type(e->lineno);
     case Eq:
-      expect_type(make_int_type(e->lineno), ts[0]);
-      expect_type(make_int_type(e->lineno), ts[1]);
+      expect_type("==(1)", make_int_type(e->lineno), ts[0]);
+      expect_type("==(2)", make_int_type(e->lineno), ts[1]);
       return make_bool_type(e->lineno);
     }
     break;
@@ -103,17 +106,17 @@ Type* typecheck_exp(Exp* e, TypeEnv* env) {
   case Call: {
     Type* funT = typecheck_exp(e->u.call.fun, env);
     if (funT->tag != FunT) {
-      printf("error, expected a function in function call");
+      cerr << "error, expected a function in function call" << endl;
       exit(-1);
     }
     if (e->u.call.args->size() != funT->u.fun.params->size()) {
-      printf("error, wrong number of arguments in function call\n");
+      cerr << "error, wrong number of arguments in function call" << endl;
       exit(-1);
     }
     auto param_iter = funT->u.fun.params->begin();
     for (auto arg_iter = e->u.call.args->begin();
          arg_iter != e->u.call.args->end(); ++arg_iter, ++param_iter) {
-      expect_type(*param_iter, typecheck_exp(*arg_iter, env));
+      expect_type("call", *param_iter, typecheck_exp(*arg_iter, env));
     }
     return funT->u.fun.ret;
     break;
@@ -134,7 +137,7 @@ void typecheck_stmt(Stmt* s, TypeEnv* env, Type* ret_type,
   case Assign: {
     Type* lhsT = typecheck_exp(s->u.assign.lhs, env);
     Type* rhsT = typecheck_exp(s->u.assign.rhs, env);
-    expect_type(lhsT, rhsT);
+    expect_type("assign", lhsT, rhsT);
     break;
   }
   case Free: {
@@ -147,9 +150,14 @@ void typecheck_stmt(Stmt* s, TypeEnv* env, Type* ret_type,
     }
     break;
   }
-  case IfGoto:
-    expect_type(make_bool_type(s->lineno),
-                typecheck_exp(s->u.if_goto.cond, env));
+  case If:
+    expect_type("condition of `if`", make_bool_type(s->lineno),
+                typecheck_exp(s->u.if_stmt.cond, env));
+    typecheck_stmt(s->u.if_stmt.thn, env, ret_type, labels);
+    typecheck_stmt(s->u.if_stmt.els, env, ret_type, labels);
+    break;
+  case Goto:
+    // to do: check the label
     break;
   case Label:
     if (labels.count(*s->u.labeled.label) > 0) {
@@ -160,7 +168,7 @@ void typecheck_stmt(Stmt* s, TypeEnv* env, Type* ret_type,
     typecheck_stmt(s->u.labeled.stmt, env, ret_type, labels);
     break;
   case Return:
-    expect_type(ret_type, typecheck_exp(s->u.ret, env));
+    expect_type("return", ret_type, typecheck_exp(s->u.ret, env));
     break;
   }
 }
@@ -173,7 +181,8 @@ void typecheck_fun_def(FunDef* f, TypeEnv* env) {
     env = new TypeEnv(i->first, i->second, env);
   }
   if (f->name == "main") {
-    expect_type(make_int_type(f->lineno), f->return_type);
+    expect_type("return type of `main`",
+                make_int_type(f->lineno), f->return_type);
     if (f->params->size() != 0) {
       printf("error, main function may not have any parameters\n");
       exit(-1);

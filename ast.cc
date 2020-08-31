@@ -251,12 +251,21 @@ Stmt* make_free(int lineno, Exp* e)  {
   return s;
 }
 
-Stmt* make_if_goto(int lineno, Exp* cond, string target)  {
+Stmt* make_if(int lineno, Exp* cond, Stmt* thn, Stmt* els)  {
   Stmt* s = new Stmt();
   s->lineno = lineno;
-  s->tag = IfGoto;
-  s->u.if_goto.cond = cond;
-  s->u.if_goto.target = new string(target);
+  s->tag = If;
+  s->u.if_stmt.cond = cond;
+  s->u.if_stmt.thn = thn;
+  s->u.if_stmt.els = els;
+  return s;
+}
+
+Stmt* make_goto(int lineno, string target)  {
+  Stmt* s = new Stmt();
+  s->lineno = lineno;
+  s->tag = Goto;
+  s->u.goto_stmt.target = new string(target);
   return s;
 }
 
@@ -303,11 +312,17 @@ void print_stmt(Stmt* s, int depth) {
     print_exp(s->u.free);
     cout << ")";
     break;
-  case IfGoto:
+  case If:
     cout << "if (";
-    print_exp(s->u.if_goto.cond);
-    cout << ") goto ";
-    cout << (*s->u.if_goto.target) << ";";
+    print_exp(s->u.if_stmt.cond);
+    cout << ")" << endl;
+    print_stmt(s->u.if_stmt.thn, depth - 1);
+    cout << endl << "else" << endl;
+    print_stmt(s->u.if_stmt.els, depth - 1);
+    break;
+  case Goto:
+    cout << "goto ";
+    cout << (*s->u.goto_stmt.target) << ";";
     break;
   case Label:
     cout << *s->u.labeled.label << ":";

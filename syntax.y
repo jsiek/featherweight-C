@@ -66,6 +66,7 @@ static list<FunDef*> program;
 %token AND
 %token OR
 %token INTTY
+%token BOOLTY
 %token FUN
 %token COLON
 %token SEMICOLON
@@ -81,6 +82,7 @@ static list<FunDef*> program;
 %token EQUAL
 %token BANG
 %token IF
+%token ELSE
 %token GOTO
 %token FREE
 %token RETURN
@@ -88,14 +90,14 @@ static list<FunDef*> program;
 %token FALSE
 %token MALLOC
 %left BAR
-%nonassoc IF 
+%nonassoc IF ELSE
 %nonassoc LP RP
 %nonassoc LS RS LT GT 
-%nonassoc ASSGN ASTR
+%nonassoc ASSGN 
 %nonassoc EQUAL
 %left AND OR
 %left PLUS MINUS
-%nonassoc NOT
+%nonassoc NOT ASTR
 %start input
 %locations
 %%
@@ -142,6 +144,7 @@ type_list:
 ;
 type:
   INTTY             { $$ = make_int_type(yylineno); }
+| BOOLTY            { $$ = make_bool_type(yylineno); }
 | FUN LP type_list RP type { $$ = make_fun_type(yylineno, $3, $5); }
 | LP type RP          { $$ = $2; }
 | type ASTR           { $$ = make_ptr_type(yylineno, $1); }
@@ -176,8 +179,9 @@ stmt:
     { $$ = make_assign(yylineno, $1, $3); }
 | FREE LP expr RP SEMICOLON
     { $$ = make_free(yylineno, $3); }
-| IF LP expr RP GOTO ID SEMICOLON
-    { $$ = make_if_goto(yylineno, $3, $6); }
+| GOTO ID SEMICOLON { $$ = make_goto(yylineno, $2); }
+| IF LP expr RP stmt ELSE stmt
+    { $$ = make_if(yylineno, $3, $5, $7); }
 | ID COLON stmt 
     { $$ = make_labeled(yylineno, $1, $3); }
 | RETURN expr SEMICOLON

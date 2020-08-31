@@ -4,11 +4,12 @@ fun main() int
  start:
   x = 1;        
  loop:          
-  if (x == 0)   
-    goto end;   
-  x = x - 1;   
-  if (true) 
+  if (x == 0) {
+    goto end;
+  } else {
+    x = x - 1;   
     goto loop;
+  }
  end:
   return x;
 }

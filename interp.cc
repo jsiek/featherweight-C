@@ -46,24 +46,28 @@ void print_val(Value* val) {
 
 Value* make_int_val(int i) {
   Value* v = new Value();
+  v->alive = true;
   v->tag = IntT; v->alive = true; v->u.integer = i;
   return v;
 }
 
 Value* make_bool_val(bool b) {
   Value* v = new Value();
+  v->alive = true;
   v->tag = BoolT; v->alive = true; v->u.boolean = b;
   return v;
 }
 
 Value* make_fun_val(FunDef* f) {
   Value* v = new Value();
+  v->alive = true;
   v->tag = FunT; v->alive = true; v->u.fun = f;
   return v;
 }
 
 Value* make_ptr_val(address addr) {
   Value* v = new Value();
+  v->alive = true;
   v->tag = PtrT; v->alive = true; v->u.ptr = addr;
   return v;
 }
@@ -151,6 +155,8 @@ Act* make_val_act(Value* v) {
   return act;
 }
 
+/***** Frames and State *****/
+
 typedef AList<string, address> Env;
 
 // { C, E, F }
@@ -206,7 +212,18 @@ void print_state(State* state) {
   cout << endl << "}" << endl;
 }
 
+/***** Auxilliary Functions *****/
+
+
+void check_alive(Value* v) {
+  if (! v->alive) {
+    cerr << "undefined: access to dead value" << endl;
+    exit(-1);
+  }
+}
+
 int val_to_int(Value* v) {
+  check_alive(v);
   switch (v->tag) {
   case IntT:
     return v->u.integer;
@@ -217,6 +234,7 @@ int val_to_int(Value* v) {
 }
 
 int val_to_bool(Value* v) {
+  check_alive(v);
   switch (v->tag) {
   case BoolT:
     return v->u.boolean;
@@ -227,6 +245,7 @@ int val_to_bool(Value* v) {
 }
 
 address val_to_ptr(Value* v) {
+  check_alive(v);
   switch (v->tag) {
   case PtrT:
     return v->u.ptr;
@@ -237,6 +256,7 @@ address val_to_ptr(Value* v) {
 }
 
 FunDef* val_to_fun(Value* v) {
+  check_alive(v);
   switch (v->tag) {
   case FunT:
     return v->u.fun;
@@ -247,6 +267,8 @@ FunDef* val_to_fun(Value* v) {
 }
 
 bool val_equal(Value* v1, Value* v2) {
+  check_alive(v1);
+  check_alive(v2);
   return (v1->tag == IntT && v2->tag == IntT && v1->u.integer == v2->u.integer)
     || (v1->tag == BoolT && v2->tag == BoolT && v1->u.boolean == v2->u.boolean)
     || (v1->tag == PtrT && v2->tag == PtrT && v1->u.ptr == v2->u.ptr)
@@ -302,7 +324,9 @@ void call_function(vector<Value*> operas, State* state) {
   // Allocate the local variables for the function
   for (auto l = f->locals->begin(); l != f->locals->end(); ++l) {
     address a = state->heap.size();
-    state->heap.push_back(0);
+    Value* v = make_int_val(0);
+    v->alive = false;
+    state->heap.push_back(v);
     env = new Env((*l).first, a, env);
   }
 
@@ -313,22 +337,30 @@ void call_function(vector<Value*> operas, State* state) {
   state->stack = cons(frame, state->stack);
 }
 
-Cons<Act*>* goto_label(string label, Stmt* stmt, Cons<Act*>* context) {
+Cons<Act*>* goto_label(string label, Stmt* stmt, Cons<Act*>* todo) {
   switch (stmt->tag) {
   case Label: {
     if (*(stmt->u.labeled.label) == label) {
       return cons(make_stmt_act(stmt->u.labeled.stmt), (Cons<Act*>*)0);
     } else {
       return goto_label(label, stmt->u.labeled.stmt,
-                        cons(make_stmt_act(stmt), context));
+                        cons(make_stmt_act(stmt), todo));
     }
   }
   case Seq: {
-    Cons<Act*>* new_context = goto_label(label, stmt->u.seq.stmt, context);
-    if (new_context) {
-      return new_context;
+    Cons<Act*>* new_todo = goto_label(label, stmt->u.seq.stmt, todo);
+    if (new_todo) {
+      return new_todo;
     } else {
-      return goto_label(label, stmt->u.seq.next, context);
+      return goto_label(label, stmt->u.seq.next, todo);
+    }
+  }
+  case If: {
+    Cons<Act*>* new_todo = goto_label(label, stmt->u.if_stmt.thn, todo);
+    if (new_todo) {
+      return new_todo;
+    } else {
+      return goto_label(label, stmt->u.if_stmt.els, todo);
     }
   }
   default:
@@ -336,13 +368,15 @@ Cons<Act*>* goto_label(string label, Stmt* stmt, Cons<Act*>* context) {
   } // switch (stmt->tag)
 }
 
+/***** State transition for handling a value *****/
+
 void handle_value(State* state) {
   Frame* frame = state->stack->curr;
   Act* val_act = frame->todo->curr;
   Act* act = frame->todo->next->curr;
   
   cout << "--- handle value "; print_val(val_act->u.val);
-  cout << " in context "; print_act(act); cout << " --->" << endl;
+  cout << " with "; print_act(act); cout << " --->" << endl;
   
   act->results.push_back(val_act->u.val);
   act->pos++;
@@ -355,7 +389,12 @@ void handle_value(State* state) {
       //    { {a :: *[] :: C, E, F} :: S, H}
       // -> { {H(a) :: C, E, F} :: S, H}
       address a = val_to_ptr(val_act->u.val);
-      frame->todo = cons(make_val_act(state->heap[a]),
+      Value* v = state->heap[a];
+      if (! v->alive) {
+        cerr << "undefined: access to dead memory" << endl;
+        exit(-1);
+      }
+      frame->todo = cons(make_val_act(v),
                             frame->todo->next->next);
       break;
     }
@@ -410,17 +449,20 @@ void handle_value(State* state) {
         frame->todo = frame->todo->next->next;
       }
       break;
-    case IfGoto:
+    case If:
       if (val_to_bool(act->results[0])) {
-        //    { {v :: if [] goto l :: C, E, F} :: S, H}
-        // -> { { goto(l), E, F } :: S, H}
-        frame->todo = goto_label(* (stmt->u.if_goto.target),
-                                    frame->fun->body, 0);
+        //    { {true :: if ([]) thn else els :: C, E, F} :: S, H}
+        // -> { { thn :: C, E, F } :: S, H}
+        frame->todo = cons(make_stmt_act(stmt->u.if_stmt.thn),
+                           frame->todo->next->next);
       } else {
-        //    { {v :: if [] goto l :: C, E, F} :: S, H}
-        // -> { { C, E, F} :: S, H}
-        frame->todo = frame->todo->next->next;
+        //    { {false :: if ([]) thn else els :: C, E, F} :: S, H}
+        // -> { { els :: C, E, F } :: S, H}
+        frame->todo = cons(make_stmt_act(stmt->u.if_stmt.els),
+                           frame->todo->next->next);
       }
+      break;
+    case Goto:
       break;
     case Return:
       //    { {v :: return [] :: C, E, F} :: {C', E', F'} :: S, H}
@@ -438,6 +480,8 @@ void handle_value(State* state) {
     cerr << "bad context in handle_value" << endl;
   } // switch act
 }
+
+/***** state transitions for lvalues *****/
 
 void step_lvalue(State* state) {
   Frame* frame = state->stack->curr;
@@ -463,6 +507,8 @@ void step_lvalue(State* state) {
     cerr << "error, not an lvalue" << endl;
   }
 }
+
+/***** state transitions for expressions *****/
 
 void step_exp(State* state) {
   Frame* frame = state->stack->curr;
@@ -525,6 +571,8 @@ void step_exp(State* state) {
   }
 }
 
+/***** state transitions for statements *****/
+
 void step_stmt(State* state) {
   Frame* frame = state->stack->curr;
   Act* act = frame->todo->curr;
@@ -541,35 +589,38 @@ void step_stmt(State* state) {
   case Free:
     cerr << "step free not implemented" << endl;
     break;
-  case IfGoto:
-    //    { {(if (e) goto l) :: C, E, F} :: S, H}
-    // -> { { e :: (if [] goto l) :: C, E, F} :: S, H}
-    frame->todo = cons(make_exp_act(stmt->u.if_goto.cond),
-                          frame->todo);
+  case If:
+    //    { {(if (e) thn else els) :: C, E, F} :: S, H}
+    // -> { { e :: (if ([]) thn else els) :: C, E, F} :: S, H}
+    frame->todo = cons(make_exp_act(stmt->u.if_stmt.cond), frame->todo);
     act->pos++;
+    break;
+  case Goto:
+    //    { { goto l :: C, E, F} :: S, H} -> { { goto_label(l), E, F } :: S, H}
+    frame->todo = goto_label(* (stmt->u.goto_stmt.target), frame->fun->body, 0);
     break;
   case Label:
     //    { {(l: s) :: C, E, F} :: S, H}
     // -> { {s :: C, E, F} :: S, H}
-    frame->todo = cons(make_stmt_act(stmt->u.labeled.stmt),
-                          frame->todo->next);
+    frame->todo = cons(make_stmt_act(stmt->u.labeled.stmt), frame->todo->next);
     break;
   case Return:
     //    { {return e :: C, E, F} :: S, H}
     // -> { {e :: return [] :: C, E, F} :: S, H}
-    frame->todo = cons(make_exp_act(stmt->u.ret),
-                          frame->todo);
+    frame->todo = cons(make_exp_act(stmt->u.ret), frame->todo);
     act->pos++;
     break;
   case Seq:
     //    { { (s1,s2) :: C, E, F} :: S, H}
     // -> { { s1 :: s2 :: C, E, F} :: S, H}
     frame->todo = cons(make_stmt_act(stmt->u.seq.stmt),
-                              cons(make_stmt_act(stmt->u.seq.next),
-                                       frame->todo->next));
+                       cons(make_stmt_act(stmt->u.seq.next),
+                            frame->todo->next));
     break;
   }
 }
+
+/***** state transition *****/
 
 void step(State* state) {
   Frame* frame = state->stack->curr;
@@ -590,6 +641,8 @@ void step(State* state) {
   } // switch
 }
 
+/***** interpret the whole program *****/
+
 int interp_program(list<FunDef*>* fs) {
   State* state = new State();
   state->funs = fs;
@@ -604,7 +657,7 @@ int interp_program(list<FunDef*>* fs) {
   state->stack = cons(frame, (Cons<Frame*>*)0);
 
   print_state(state);
-  // Run the program
+  // run the program
   while (length(state->stack) > 1
          || length(state->stack->curr->todo) > 1
          || state->stack->curr->todo->curr->tag != ValAct) {

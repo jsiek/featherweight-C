@@ -1,0 +1,19 @@
+fun f(int* p) bool
+{
+  *p = *p - 1;
+  return true;
+}
+
+fun main() int
+{
+  int* p;
+  p = malloc(int);
+  *p = 1;
+  if (f(p)) {
+    goto weird;
+  } else {
+    *p = 2;
+  weird:
+    return *p;
+  }
+}

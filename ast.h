@@ -102,7 +102,7 @@ void print_exp(Exp*);
 
 /***** Statements *****/
 
-enum StmtKind { Assign, Free, IfGoto, Label, Return, Seq };
+enum StmtKind { Assign, Free, If, Goto, Label, Return, Seq };
 
 struct Stmt {
   int lineno;
@@ -110,7 +110,8 @@ struct Stmt {
   union {
     struct { Exp* lhs; Exp* rhs; } assign;
     Exp* free;
-    struct { Exp* cond; string* target; } if_goto;
+    struct { Exp* cond; Stmt* thn; Stmt* els; } if_stmt;
+    struct { string* target; } goto_stmt;
     struct { string* label; Stmt* stmt; } labeled;
     Exp* ret;
     struct { Stmt* stmt; Stmt* next; } seq;
@@ -119,7 +120,8 @@ struct Stmt {
 
 Stmt* make_assign(int lineno, Exp* lhs, Exp* rhs);
 Stmt* make_free(int lineno, Exp* e);
-Stmt* make_if_goto(int lineno, Exp* cond, string target);
+Stmt* make_if(int lineno, Exp* cond, Stmt* thn, Stmt* els);
+Stmt* make_goto(int lineno, string target);
 Stmt* make_labeled(int lineno, string label, Stmt* stmt);
 Stmt* make_return(int lineno, Exp* e);
 Stmt* make_seq(int lineno, Stmt* s1, Stmt* s2);
