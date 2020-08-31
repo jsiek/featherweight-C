@@ -1,6 +1,6 @@
-fun main () int 
-  int x;
+fun main() int 
 {
+  int x;
  start:
   x = 1;        
  loop:          

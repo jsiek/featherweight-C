@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string>
 #include <iostream>
+#include <iomanip>
 #include "ast.h"
 
 using std::cout;
@@ -89,6 +90,14 @@ Exp* make_int(int lineno, int i) {
   return e;
 }
 
+Exp* make_bool(int lineno, bool b) {
+  Exp* e = new Exp();
+  e->lineno = lineno;
+  e->tag = Bool;
+  e->u.boolean = b;
+  return e;
+}
+
 Exp* make_addr_of(int lineno, Exp* lval) {
   Exp* e = new Exp();
   e->lineno = lineno;
@@ -167,10 +176,14 @@ void print_op(Operator op) {
 void print_exp(Exp* e) {
   switch (e->tag) {
   case Int:
-    printf("%d", e->u.integer);
+    cout << e->u.integer;
+    break;
+  case Bool:
+    cout << std::boolalpha;   
+    cout << e->u.boolean;
     break;
   case AddrOf:
-    printf("&");
+    cout << "&";
     print_exp(e->u.addr_of);
     break;
   case PrimOp:
@@ -189,17 +202,17 @@ void print_exp(Exp* e) {
     }
     break;
   case Var:
-    printf("%s", e->u.var->c_str());
+    cout << *(e->u.var);
     break;
   case Deref:
-    printf("*");
+    cout << "*";
     print_exp(e->u.deref);
     break;
   case Call:
     print_exp(e->u.call.fun);
-    printf("(");
+    cout << "(";
     print_vector(e->u.call.args, print_exp, ", ");
-    printf(")");
+    cout << ")";
     break;
   }
 }
@@ -258,40 +271,45 @@ Stmt* make_seq(int lineno, Stmt* s1, Stmt* s2) {
   return s;
 }
 
-void print_stmt(Stmt* s) {
+void print_stmt(Stmt* s, int depth) {
+  if (depth == 0) {
+    cout << " ... ";
+    return;
+  }
   switch (s->tag) {
   case Assign:
     print_exp(s->u.assign.lhs);
-    printf(" = ");
+    cout << " = ";
     print_exp(s->u.assign.rhs);
-    printf(";");
+    cout << ";";
     break;
   case Free:
-    printf("free(");
+    cout << "free(";
     print_exp(s->u.free);
-    printf(")");
+    cout << ")";
     break;
   case IfGoto:
-    printf("if (");
+    cout << "if (";
     print_exp(s->u.if_goto.cond);
-    printf(") goto ");
-    printf("%s;", s->u.if_goto.target->c_str());
+    cout << ") goto ";
+    cout << (*s->u.if_goto.target) << ";";
     break;
   case Label:
-    printf("%s:\n", s->u.labeled.label->c_str());
-    print_stmt(s->u.labeled.stmt);
+    cout << *s->u.labeled.label << ":";
+    if (depth != 0)
+      cout << endl;
+    print_stmt(s->u.labeled.stmt, depth - 1);
     break;
   case Return:
-    printf("return ");
+    cout << "return ";
     print_exp(s->u.ret);
-    printf(";");
+    cout << ";";
     break;
   case Seq:
-    printf("{\n");
-    print_stmt(s->u.seq.stmt);
-    cout << endl;
-    print_stmt(s->u.seq.next);
-    printf("\n}\n");
+    print_stmt(s->u.seq.stmt, depth);
+    if (depth != 0)    
+      cout << endl;
+    print_stmt(s->u.seq.next, depth - 1);
     break;
   }
 }
@@ -328,7 +346,7 @@ void print_var_decls(VarTypes* ps) {
   }
 }
 
-void print_fun_def(FunDef* f) {
+void print_fun_def_depth(FunDef* f, int depth) {
   printf("fun %s", f->name.c_str());
   printf("(");
   print_params(f->params);
@@ -340,8 +358,12 @@ void print_fun_def(FunDef* f) {
     print_var_decls(f->locals);
     printf("\n");
   }
-  print_stmt(f->body);
-  printf("\n}");
+  print_stmt(f->body, depth);
+  printf("\n}\n");
+}
+
+void print_fun_def(FunDef* f) {
+  print_fun_def_depth(f, -1);
 }
 
 char *read_file(FILE* fp)

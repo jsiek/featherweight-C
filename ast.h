@@ -69,7 +69,7 @@ void print_type(Type*);
 
 /***** Expressions *****/
 
-enum ExpKind { Var, Deref, Int, AddrOf, PrimOp, Call };
+enum ExpKind { Var, Deref, Int, Bool, AddrOf, PrimOp, Call };
 enum Operator { Neg, Add, Sub, Not, And, Or, Eq };
 
 struct Exp {
@@ -79,6 +79,7 @@ struct Exp {
     string* var;
     Exp* deref;
     int integer;
+    bool boolean;
     Exp* addr_of;
     struct { Operator op; vector<Exp*>* args; } prim_op;
     struct { Exp* fun; vector<Exp*>* args; } call;
@@ -88,6 +89,7 @@ struct Exp {
 Exp* make_var(int lineno, string var);
 Exp* make_deref(int lineno, Exp* exp);
 Exp* make_int(int lineno, int i);
+Exp* make_bool(int lineno, bool b);
 Exp* make_addr_of(int lineno, Exp* lval);
 Exp* make_op(int lineno, Operator op, list<Exp*>* args);
 Exp* make_unop(int lineno, enum Operator op, Exp* arg);
@@ -120,7 +122,7 @@ Stmt* make_labeled(int lineno, string label, Stmt* stmt);
 Stmt* make_return(int lineno, Exp* e);
 Stmt* make_seq(int lineno, Stmt* s1, Stmt* s2);
 
-void print_stmt(Stmt*);
+void print_stmt(Stmt*, int);
 
 /***** Declarations *****/
 
@@ -136,5 +138,6 @@ struct FunDef {
 FunDef* make_fun_def(int lineno, string name, Type* ret_type, VarTypes* params,
                      VarTypes* locals, Stmt* body);
 void print_fun_def(FunDef*);
+void print_fun_def_depth(FunDef*, int);
 
 #endif

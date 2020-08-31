@@ -29,6 +29,8 @@ IF     "if"
 FREE   "free"
 INTTY  "int"
 FUN    "fun"
+TRUE   "true"
+FALSE  "false"
 %%
 {AND} { return AND; }
 {OR} { return OR; }
@@ -51,6 +53,8 @@ FUN    "fun"
 {RETURN} { return RETURN; }
 {GOTO}   { return GOTO; }
 {FREE}   { return FREE; }
+{TRUE}   { return TRUE; }
+{FALSE}   { return FALSE; }
 {ID}     {
            int n = strlen(yytext);
            yylval.str = (char*)malloc((n + 1) * sizeof(char));

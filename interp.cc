@@ -4,6 +4,7 @@
 #include "interp.h"
 #include "assoc_list.h"
 #include "cons_list.h"
+#include "typecheck.h" // for print_error_string
 
 using std::vector;
 using std::map;
@@ -63,7 +64,7 @@ Value* make_fun_val(FunDef* f) {
 
 Value* make_ptr_val(address addr) {
   Value* v = new Value();
-  v->tag = FunT; v->alive = true; v->u.ptr = addr;
+  v->tag = PtrT; v->alive = true; v->u.ptr = addr;
   return v;
 }
 
@@ -90,17 +91,21 @@ void print_ctx(Ctx* ctx) {
     print_exp(ctx->u.exp);
     break;
   case StmtCtx:
-    print_stmt(ctx->u.stmt);
+    print_stmt(ctx->u.stmt, 1);
     break;
   case ValCtx:
     print_val(ctx->u.val);
     break;
   }
   cout << "[" << ctx->pos << "]";
-  for (auto iter = ctx->results.begin(); iter != ctx->results.end(); ++iter) {
-    if (*iter)
-      print_val(*iter);
-    cout << ",";
+  if (ctx->results.size() > 0) {
+    cout << "(";
+    for (auto iter = ctx->results.begin(); iter != ctx->results.end(); ++iter) {
+      if (*iter)
+        print_val(*iter);
+      cout << ",";
+    }
+    cout << ")";
   }
 }
 
@@ -335,8 +340,8 @@ void handle_value(State* state) {
   Ctx* val_ctx = frame->control->curr;
   Ctx* ctx = frame->control->next->curr;
   
-  cout << "handle value "; print_val(val_ctx->u.val);
-  cout << " in context "; print_ctx(ctx); cout << endl;
+  cout << "--- handle value "; print_val(val_ctx->u.val);
+  cout << " in context "; print_ctx(ctx); cout << " --->" << endl;
   
   ctx->results.push_back(val_ctx->u.val);
   ctx->pos++;
@@ -357,12 +362,12 @@ void handle_value(State* state) {
         //    { {v :: op(vs,[],e,es) :: C, E, F} :: S, H}
         // -> { {e :: op(vs,v,[],es) :: C, E, F} :: S, H}
         Exp* arg = (*exp->u.prim_op.args)[ctx->pos];
-        frame->control = cons(make_exp_ctx(arg), frame->control);
+        frame->control = cons(make_exp_ctx(arg), frame->control->next);
       } else {
         //    { {v :: op(vs,[]) :: C, E, F} :: S, H}
         // -> { {eval_prim(op, (vs,v)) :: C, E, F} :: S, H}
         Value* v = eval_prim(exp->u.prim_op.op, ctx->results);
-        frame->control = cons(make_val_ctx(v), frame->control->next);
+        frame->control = cons(make_val_ctx(v), frame->control->next->next);
       }
       break;
     }
@@ -445,11 +450,11 @@ void step_lvalue(State* state) {
   Frame* frame = state->stack->curr;
   Ctx* ctx = frame->control->curr;
   Exp* exp = ctx->u.exp;
-  cout << "step lvalue "; print_exp(exp); cout << endl;
+  cout << "--- step lvalue "; print_exp(exp); cout << " --->" << endl;
   switch (exp->tag) {
   case Var: {
     // { {x :: C, E, F} :: S, H} -> { {E(x) :: C, E, F} :: S, H}
-    address a = lookup(frame->env, *(exp->u.var));
+    address a = lookup(frame->env, *(exp->u.var), print_error_string);
     Value* v = make_ptr_val(a);
     frame->control = cons(make_val_ctx(v), frame->control->next);
     break;
@@ -470,11 +475,11 @@ void step_exp(State* state) {
   Frame* frame = state->stack->curr;
   Ctx* ctx = frame->control->curr;
   Exp* exp = ctx->u.exp;
-  cout << "step exp "; print_exp(exp); cout << endl;
+  cout << "--- step exp "; print_exp(exp); cout << " --->" << endl;
   switch (exp->tag) {
   case Var: {
     // { {x :: C, E, F} :: S, H} -> { {H(E(x)) :: C, E, F} :: S, H}
-    address a = lookup(frame->env, *(exp->u.var));
+    address a = lookup(frame->env, *(exp->u.var), print_error_string);
     Value* v = state->heap[a];
     frame->control = cons(make_val_ctx(v), frame->control->next);
     break;
@@ -488,6 +493,11 @@ void step_exp(State* state) {
   case Int:
     // { {n :: C, E, F} :: S, H} -> { {n' :: C, E, F} :: S, H}
     frame->control = cons(make_val_ctx(make_int_val(exp->u.integer)),
+                          frame->control->next);
+    break;
+  case Bool:
+    // { {n :: C, E, F} :: S, H} -> { {n' :: C, E, F} :: S, H}
+    frame->control = cons(make_val_ctx(make_bool_val(exp->u.boolean)),
                           frame->control->next);
     break;
   case AddrOf:
@@ -518,7 +528,7 @@ void step_stmt(State* state) {
   Frame* frame = state->stack->curr;
   Ctx* ctx = frame->control->curr;
   Stmt* stmt = ctx->u.stmt;
-  cout << "step stmt "; print_stmt(stmt); cout << endl;
+  cout << "--- step stmt "; print_stmt(stmt, 1); cout << " --->" << endl;
   switch (stmt->tag) {
   case Assign:
     //    { {(lv = e) :: C, E, F} :: S, H}

@@ -42,10 +42,14 @@ void expect_type(Type* expected, Type* actual) {
   }
 }
 
+void print_error_string(string s) {
+  cerr << s;
+}
+
 Type* typecheck_exp(Exp* e, TypeEnv* env) {
   switch (e->tag) {
   case Var:
-    return lookup(env, *(e->u.var));
+    return lookup(env, *(e->u.var), print_error_string);
   case Deref: {
     Type* t = typecheck_exp(e->u.deref, env);
     switch (t->tag) {
@@ -60,6 +64,9 @@ Type* typecheck_exp(Exp* e, TypeEnv* env) {
   }
   case Int:
     return make_int_type(e->lineno);
+    break;
+  case Bool:
+    return make_bool_type(e->lineno);
     break;
   case AddrOf:
     return make_ptr_type(e->lineno, typecheck_exp(e->u.addr_of, env));

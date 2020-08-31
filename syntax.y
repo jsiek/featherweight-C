@@ -84,6 +84,8 @@ static list<FunDef*> program;
 %token GOTO
 %token FREE
 %token RETURN
+%token TRUE
+%token FALSE
 %left BAR
 %nonassoc IF 
 %nonassoc LP RP
@@ -99,7 +101,7 @@ static list<FunDef*> program;
 input:
   fun_def_list {
     printf("program:\n");
-    print_list($1, print_fun_def, "\n");
+    print_list($1, print_fun_def, "");
     TypeEnv* top = top_level($1);
     for (auto i = $1->begin(); i != $1->end(); ++i) {
       typecheck_fun_def(*i, top);
@@ -125,6 +127,7 @@ input:
 ;
 params:
   /* empty */ { $$ = new VarTypes(); }
+| type ID { $$ = new VarTypes; $$->push_front(make_pair($2, $1)); }
 | type ID COMMA params { $$ = $4; $$->push_front(make_pair($2, $1)); }
 ;
 var_decls:
@@ -149,6 +152,8 @@ lvalue:
 expr:
   lvalue           { $$ = $1; }
 | INT              { $$ = make_int(yylineno, $1); }
+| TRUE             { $$ = make_bool(yylineno, true); }
+| FALSE            { $$ = make_bool(yylineno, false); }
 | expr EQUAL expr  { $$ = make_binop(yylineno, Eq, $1, $3); }
 | expr PLUS expr   { $$ = make_binop(yylineno, Add, $1, $3); }
 | expr MINUS expr  { $$ = make_binop(yylineno, Sub, $1, $3); }
@@ -182,7 +187,7 @@ stmt_list :
 | stmt stmt_list { $$ = make_seq(yylineno, $1, $2); }
 ;
 fun_def:
-  FUN ID LP params RP type LC var_decls stmt RC
+  FUN ID LP params RP type LC var_decls stmt_list RC
     { $$ = make_fun_def(yylineno, $2, $6, $4, $8, $9); }
 ;
 fun_def_list:
