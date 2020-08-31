@@ -481,7 +481,7 @@ void handle_value(State* state) {
         // -> { { C, E, F} :: S, H(a := v)}
         Value* a = act->results[0];
         Value* v = act->results[1];
-        state->heap[val_to_ptr(a)] = v;
+        state->heap[val_to_ptr(a)] = v; // copy? -Jeremy
         frame->todo = frame->todo->next->next;
       }
       break;
