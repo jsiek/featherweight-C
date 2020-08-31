@@ -1,0 +1,6 @@
+fun main () int {
+  int* p;
+  p = malloc(int);
+  *p = 0;
+  return *p;
+}

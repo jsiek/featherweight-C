@@ -69,7 +69,7 @@ void print_type(Type*);
 
 /***** Expressions *****/
 
-enum ExpKind { Var, Deref, Int, Bool, AddrOf, PrimOp, Call };
+enum ExpKind { Var, Deref, Int, Bool, AddrOf, PrimOp, Call, Malloc };
 enum Operator { Neg, Add, Sub, Not, And, Or, Eq };
 
 struct Exp {
@@ -81,6 +81,7 @@ struct Exp {
     int integer;
     bool boolean;
     Exp* addr_of;
+    Type* malloc;
     struct { Operator op; vector<Exp*>* args; } prim_op;
     struct { Exp* fun; vector<Exp*>* args; } call;
   } u;
@@ -92,6 +93,7 @@ Exp* make_int(int lineno, int i);
 Exp* make_bool(int lineno, bool b);
 Exp* make_addr_of(int lineno, Exp* lval);
 Exp* make_op(int lineno, Operator op, list<Exp*>* args);
+Exp* make_malloc(int lineno, Type* type);
 Exp* make_unop(int lineno, enum Operator op, Exp* arg);
 Exp* make_binop(int lineno, enum Operator op, Exp* arg1, Exp* arg2);
 Exp* make_call(int lineno, Exp* fun, list<Exp*>* args);

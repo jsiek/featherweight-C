@@ -117,7 +117,9 @@ Type* typecheck_exp(Exp* e, TypeEnv* env) {
     }
     return funT->u.fun.ret;
     break;
-    }
+  }
+  case Malloc:
+    return make_ptr_type(e->lineno, e->u.malloc);
   }
 }
 

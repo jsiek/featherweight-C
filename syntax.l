@@ -26,6 +26,7 @@ COMMENT \/\/[^\n]*\n
 RETURN "return"
 GOTO   "goto"
 IF     "if"
+MALLOC "malloc"
 FREE   "free"
 INTTY  "int"
 FUN    "fun"
@@ -53,6 +54,7 @@ FALSE  "false"
 {RETURN} { return RETURN; }
 {GOTO}   { return GOTO; }
 {FREE}   { return FREE; }
+{MALLOC} { return MALLOC; }
 {TRUE}   { return TRUE; }
 {FALSE}   { return FALSE; }
 {ID}     {

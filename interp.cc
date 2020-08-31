@@ -68,39 +68,39 @@ Value* make_ptr_val(address addr) {
   return v;
 }
 
-/***** Contexts *****/
+/***** Actions *****/
 
-enum CtxKind { LValCtx, ExpCtx, StmtCtx, ValCtx };
+enum ActKind { LValAct, ExpAct, StmtAct, ValAct };
 
-struct Ctx {
-  CtxKind tag;
+struct Act {
+  ActKind tag;
   union {
-    Exp* exp;   // for LValCtx and ExpCtx
+    Exp* exp;             // exp is for LValAct and ExpAct
     Stmt* stmt;
-    Value* val;
+    Value* val;           // val is for finished actions with a value (ValAct)
   } u;
-  
-  int pos;
-  vector<Value*> results;
+  int pos;                // position or state of the action
+  vector<Value*> results; // results from subexpression
 };
+typedef Cons<Act*>* ActList;
 
-void print_ctx(Ctx* ctx) {
-  switch (ctx->tag) {
-  case LValCtx:
-  case ExpCtx:
-    print_exp(ctx->u.exp);
+void print_act(Act* act) {
+  switch (act->tag) {
+  case LValAct:
+  case ExpAct:
+    print_exp(act->u.exp);
     break;
-  case StmtCtx:
-    print_stmt(ctx->u.stmt, 1);
+  case StmtAct:
+    print_stmt(act->u.stmt, 1);
     break;
-  case ValCtx:
-    print_val(ctx->u.val);
+  case ValAct:
+    print_val(act->u.val);
     break;
   }
-  cout << "[" << ctx->pos << "]";
-  if (ctx->results.size() > 0) {
+  cout << "[" << act->pos << "]";
+  if (act->results.size() > 0) {
     cout << "(";
-    for (auto iter = ctx->results.begin(); iter != ctx->results.end(); ++iter) {
+    for (auto iter = act->results.begin(); iter != act->results.end(); ++iter) {
       if (*iter)
         print_val(*iter);
       cout << ",";
@@ -109,63 +109,63 @@ void print_ctx(Ctx* ctx) {
   }
 }
 
-void print_ctx_list(Cons<Ctx*>* ls) {
+void print_act_list(Cons<Act*>* ls) {
   if (ls) {
-    print_ctx(ls->curr);
+    print_act(ls->curr);
     if (ls->next) {
       cout << " :: ";
-      print_ctx_list(ls->next);
+      print_act_list(ls->next);
     }
   }
 }
 
-Ctx* make_exp_ctx(Exp* e) {
-  Ctx* ctx = new Ctx();
-  ctx->tag = ExpCtx;
-  ctx->u.exp = e;
-  ctx->pos = -1;
-  return ctx;
+Act* make_exp_act(Exp* e) {
+  Act* act = new Act();
+  act->tag = ExpAct;
+  act->u.exp = e;
+  act->pos = -1;
+  return act;
 }
 
-Ctx* make_lval_ctx(Exp* e) {
-  Ctx* ctx = new Ctx();
-  ctx->tag = LValCtx;
-  ctx->u.exp = e;
-  ctx->pos = -1;
-  return ctx;
+Act* make_lval_act(Exp* e) {
+  Act* act = new Act();
+  act->tag = LValAct;
+  act->u.exp = e;
+  act->pos = -1;
+  return act;
 }
 
-Ctx* make_stmt_ctx(Stmt* s) {
-  Ctx* ctx = new Ctx();
-  ctx->tag = StmtCtx;
-  ctx->u.stmt = s;
-  ctx->pos = -1;
-  return ctx;
+Act* make_stmt_act(Stmt* s) {
+  Act* act = new Act();
+  act->tag = StmtAct;
+  act->u.stmt = s;
+  act->pos = -1;
+  return act;
 }
 
-Ctx* make_val_ctx(Value* v) {
-  Ctx* ctx = new Ctx();
-  ctx->tag = ValCtx;
-  ctx->u.val = v;
-  ctx->pos = -1;
-  return ctx;
+Act* make_val_act(Value* v) {
+  Act* act = new Act();
+  act->tag = ValAct;
+  act->u.val = v;
+  act->pos = -1;
+  return act;
 }
 
 typedef AList<string, address> Env;
 
 // { C, E, F }
 struct Frame {
-  Cons<Ctx*>* control;
+  Cons<Act*>* todo;
   Env* env;
   FunDef* fun;
-  Frame(FunDef* f, Env* e, Cons<Ctx*>* c) : fun(f), env(e), control(c) { }
+  Frame(FunDef* f, Env* e, Cons<Act*>* c) : fun(f), env(e), todo(c) { }
 };
 
 void print_frame(Frame* frame) {
   if (frame->fun)
     cout << frame->fun->name;
   cout << "{";
-  print_ctx_list(frame->control);
+  print_act_list(frame->todo);
   cout << "}"; 
 }
 
@@ -272,14 +272,15 @@ Value* eval_prim(Operator op, const vector<Value*>& args) {
   }
 }
 
-Env* global_functions(State* state) {
-  Env* env = 0;
+Env* global_functions;
+  
+void init_global_functions(State* state) {
+  global_functions = 0;
   for (auto iter = state->funs->begin(); iter != state->funs->end(); ++iter) {
     address a = state->heap.size();
     state->heap.push_back(make_fun_val(*iter));    
-    env = new Env((*iter)->name, a, env);
+    global_functions = new Env((*iter)->name, a, global_functions);
   }
-  return env;
 }
 
 //    { S, H} -> { { C, E, F} :: S, H}
@@ -288,7 +289,7 @@ Env* global_functions(State* state) {
 //       F is the function
 void call_function(vector<Value*> operas, State* state) {
   FunDef* f = val_to_fun(operas[0]);
-  Env* env = global_functions(state);
+  Env* env = global_functions;
 
   // Bind arguments to parameters
   int pos = 1;
@@ -307,23 +308,23 @@ void call_function(vector<Value*> operas, State* state) {
 
   // Create the new frame and push it on the stack
   
-  Frame* frame = new Frame(f, env, cons(make_stmt_ctx(f->body),
-                                        (Cons<Ctx*>*)0));
+  Frame* frame = new Frame(f, env, cons(make_stmt_act(f->body),
+                                        (Cons<Act*>*)0));
   state->stack = cons(frame, state->stack);
 }
 
-Cons<Ctx*>* goto_label(string label, Stmt* stmt, Cons<Ctx*>* context) {
+Cons<Act*>* goto_label(string label, Stmt* stmt, Cons<Act*>* context) {
   switch (stmt->tag) {
   case Label: {
     if (*(stmt->u.labeled.label) == label) {
-      return cons(make_stmt_ctx(stmt->u.labeled.stmt), (Cons<Ctx*>*)0);
+      return cons(make_stmt_act(stmt->u.labeled.stmt), (Cons<Act*>*)0);
     } else {
       return goto_label(label, stmt->u.labeled.stmt,
-                        cons(make_stmt_ctx(stmt), context));
+                        cons(make_stmt_act(stmt), context));
     }
   }
   case Seq: {
-    Cons<Ctx*>* new_context = goto_label(label, stmt->u.seq.stmt, context);
+    Cons<Act*>* new_context = goto_label(label, stmt->u.seq.stmt, context);
     if (new_context) {
       return new_context;
     } else {
@@ -337,60 +338,52 @@ Cons<Ctx*>* goto_label(string label, Stmt* stmt, Cons<Ctx*>* context) {
 
 void handle_value(State* state) {
   Frame* frame = state->stack->curr;
-  Ctx* val_ctx = frame->control->curr;
-  Ctx* ctx = frame->control->next->curr;
+  Act* val_act = frame->todo->curr;
+  Act* act = frame->todo->next->curr;
   
-  cout << "--- handle value "; print_val(val_ctx->u.val);
-  cout << " in context "; print_ctx(ctx); cout << " --->" << endl;
+  cout << "--- handle value "; print_val(val_act->u.val);
+  cout << " in context "; print_act(act); cout << " --->" << endl;
   
-  ctx->results.push_back(val_ctx->u.val);
-  ctx->pos++;
+  act->results.push_back(val_act->u.val);
+  act->pos++;
              
-  switch (ctx->tag) {
-  case ExpCtx: {
-    Exp* exp = ctx->u.exp;
+  switch (act->tag) {
+  case ExpAct: {
+    Exp* exp = act->u.exp;
     switch (exp->tag) {
     case Deref: {
       //    { {a :: *[] :: C, E, F} :: S, H}
       // -> { {H(a) :: C, E, F} :: S, H}
-      address a = val_to_ptr(ctx->results[0]);
-      frame->control = cons(make_val_ctx(state->heap[a]),
-                            frame->control->next->next);
+      address a = val_to_ptr(val_act->u.val);
+      frame->todo = cons(make_val_act(state->heap[a]),
+                            frame->todo->next->next);
+      break;
     }
     case PrimOp: {
-      if (ctx->pos != exp->u.prim_op.args->size()) {
+      if (act->pos != exp->u.prim_op.args->size()) {
         //    { {v :: op(vs,[],e,es) :: C, E, F} :: S, H}
         // -> { {e :: op(vs,v,[],es) :: C, E, F} :: S, H}
-        Exp* arg = (*exp->u.prim_op.args)[ctx->pos];
-        frame->control = cons(make_exp_ctx(arg), frame->control->next);
+        Exp* arg = (*exp->u.prim_op.args)[act->pos];
+        frame->todo = cons(make_exp_act(arg), frame->todo->next);
       } else {
         //    { {v :: op(vs,[]) :: C, E, F} :: S, H}
         // -> { {eval_prim(op, (vs,v)) :: C, E, F} :: S, H}
-        Value* v = eval_prim(exp->u.prim_op.op, ctx->results);
-        frame->control = cons(make_val_ctx(v), frame->control->next->next);
+        Value* v = eval_prim(exp->u.prim_op.op, act->results);
+        frame->todo = cons(make_val_act(v), frame->todo->next->next);
       }
       break;
     }
     case Call: {
-      if (ctx->pos == 1 + exp->u.call.args->size()) {
-        //    { { v :: lhs = f(vs,[]) :: C, E, F} :: S, H}
-        // -> { {C',E',F'} :: {(x = []) :: C, E, F} :: S, H}
-        frame->control = frame->control->next->next;
-        call_function(ctx->results, state);
-      } else if (ctx->pos == 1) {
-        //    { { v :: [](e,es) :: C, E, F} :: S, H}
-        // -> { { e :: v([],es) :: C, E, F} :: S, H}
-        if (exp->u.call.args->size() > 0) {
-          frame->control = cons(make_exp_ctx((*exp->u.call.args)[0]),
-                                frame->control->next);
-        } else {
-          
-        }
+      if (act->pos == 1 + exp->u.call.args->size()) {
+        //    { { v :: f(vs,[]) :: C, E, F} :: S, H}
+        // -> { {C',E',F'} :: {C, E, F} :: S, H}
+        frame->todo = frame->todo->next->next;
+        call_function(act->results, state);
       } else {
-        //    { { v :: call(f, (vs,[],e,es)) :: C, E, F} :: S, H}
-        // -> { { e :: call(f, (vs,v,[],es)) :: C, E, F} :: S, H}
-        frame->control = cons(make_exp_ctx((*exp->u.call.args)[ctx->pos - 1]),
-                              frame->control->next);
+        //    { { v :: f(vs,[],e,es)) :: C, E, F} :: S, H}
+        // -> { { e :: f(vs,v,[],es)) :: C, E, F} :: S, H}
+        frame->todo = cons(make_exp_act((*exp->u.call.args)[act->pos - 1]),
+                              frame->todo->next);
       }
       break;
     }
@@ -399,34 +392,34 @@ void handle_value(State* state) {
     }
     break;
   }
-  case StmtCtx: {
-    Stmt* stmt = ctx->u.stmt;
+  case StmtAct: {
+    Stmt* stmt = act->u.stmt;
     switch (stmt->tag) {
     case Assign:
-      if (ctx->pos == 1) {
+      if (act->pos == 1) {
         //    { { a :: ([] = e) :: C, E, F} :: S, H}
         // -> { { e :: (a = []) :: C, E, F} :: S, H}
-        frame->control = cons(make_exp_ctx(stmt->u.assign.rhs),
-                              frame->control->next);
-      } else if (ctx->pos == 2) {
+        frame->todo = cons(make_exp_act(stmt->u.assign.rhs),
+                              frame->todo->next);
+      } else if (act->pos == 2) {
         //    { { v :: (a = []) :: C, E, F} :: S, H}
         // -> { { C, E, F} :: S, H(a := v)}
-        Value* a = ctx->results[0];
-        Value* v = ctx->results[1];
+        Value* a = act->results[0];
+        Value* v = act->results[1];
         state->heap[val_to_ptr(a)] = v;
-        frame->control = frame->control->next->next;
+        frame->todo = frame->todo->next->next;
       }
       break;
     case IfGoto:
-      if (val_to_bool(ctx->results[0])) {
+      if (val_to_bool(act->results[0])) {
         //    { {v :: if [] goto l :: C, E, F} :: S, H}
         // -> { { goto(l), E, F } :: S, H}
-        frame->control = goto_label(* (stmt->u.if_goto.target),
+        frame->todo = goto_label(* (stmt->u.if_goto.target),
                                     frame->fun->body, 0);
       } else {
         //    { {v :: if [] goto l :: C, E, F} :: S, H}
         // -> { { C, E, F} :: S, H}
-        frame->control = frame->control->next->next;
+        frame->todo = frame->todo->next->next;
       }
       break;
     case Return:
@@ -434,7 +427,7 @@ void handle_value(State* state) {
       // -> { {v :: C', E', F'} :: S, H}
       state->stack = state->stack->next;
       frame = state->stack->curr;
-      frame->control = cons(val_ctx, frame->control);
+      frame->todo = cons(val_act, frame->todo);
       break;
     default:
       cerr << "unhandled statement" << endl;
@@ -443,27 +436,27 @@ void handle_value(State* state) {
   }
   default:
     cerr << "bad context in handle_value" << endl;
-  } // switch ctx
+  } // switch act
 }
 
 void step_lvalue(State* state) {
   Frame* frame = state->stack->curr;
-  Ctx* ctx = frame->control->curr;
-  Exp* exp = ctx->u.exp;
+  Act* act = frame->todo->curr;
+  Exp* exp = act->u.exp;
   cout << "--- step lvalue "; print_exp(exp); cout << " --->" << endl;
   switch (exp->tag) {
   case Var: {
     // { {x :: C, E, F} :: S, H} -> { {E(x) :: C, E, F} :: S, H}
     address a = lookup(frame->env, *(exp->u.var), print_error_string);
     Value* v = make_ptr_val(a);
-    frame->control = cons(make_val_ctx(v), frame->control->next);
+    frame->todo = cons(make_val_act(v), frame->todo->next);
     break;
   }
   case Deref: {
     // { {*e :: C, E, F} :: S, H} -> { e :: C, E, F} :: S, H}
     // Note: we do not push *[] because it's not needed in lvalue context.
-    frame->control = cons(make_exp_ctx(exp->u.deref), frame->control->next);
-    ctx->pos++;
+    frame->todo = cons(make_exp_act(exp->u.deref), frame->todo->next);
+    act->pos++;
     break;
   }
   default:
@@ -473,69 +466,77 @@ void step_lvalue(State* state) {
 
 void step_exp(State* state) {
   Frame* frame = state->stack->curr;
-  Ctx* ctx = frame->control->curr;
-  Exp* exp = ctx->u.exp;
+  Act* act = frame->todo->curr;
+  Exp* exp = act->u.exp;
   cout << "--- step exp "; print_exp(exp); cout << " --->" << endl;
   switch (exp->tag) {
   case Var: {
     // { {x :: C, E, F} :: S, H} -> { {H(E(x)) :: C, E, F} :: S, H}
     address a = lookup(frame->env, *(exp->u.var), print_error_string);
     Value* v = state->heap[a];
-    frame->control = cons(make_val_ctx(v), frame->control->next);
+    frame->todo = cons(make_val_act(v), frame->todo->next);
     break;
   }
   case Deref: {
     // { {*e :: C, E, F} :: S, H} -> { { e :: *[] :: C, E, F} :: S, H}
-    frame->control = cons(make_exp_ctx(exp->u.deref), frame->control);
-    ctx->pos++;
+    frame->todo = cons(make_exp_act(exp->u.deref), frame->todo);
+    act->pos++;
     break;
   }
   case Int:
     // { {n :: C, E, F} :: S, H} -> { {n' :: C, E, F} :: S, H}
-    frame->control = cons(make_val_ctx(make_int_val(exp->u.integer)),
-                          frame->control->next);
+    frame->todo = cons(make_val_act(make_int_val(exp->u.integer)),
+                          frame->todo->next);
     break;
   case Bool:
     // { {n :: C, E, F} :: S, H} -> { {n' :: C, E, F} :: S, H}
-    frame->control = cons(make_val_ctx(make_bool_val(exp->u.boolean)),
-                          frame->control->next);
+    frame->todo = cons(make_val_act(make_bool_val(exp->u.boolean)),
+                          frame->todo->next);
     break;
   case AddrOf:
     // { {&e :: C, E, F} :: S, H} -> { {e :: C, E, F} :: S, H}
     // Note: we do not push &[] because it's the identity.
-    frame->control = cons(make_lval_ctx(exp->u.addr_of),
-                          frame->control->next);
-    ctx->pos++;
+    frame->todo = cons(make_lval_act(exp->u.addr_of),
+                          frame->todo->next);
+    act->pos++;
     break;
+  case Malloc: {
+    // { { malloc(T) :: C, E, F} :: S, H}
+    // -> { { a :: C, E, F} :: S, H(a = _) }
+    address a = state->heap.size();
+    state->heap.push_back(0);
+    frame->todo = cons(make_val_act(make_ptr_val(a)), frame->todo->next);
+    break;
+  }
   case PrimOp:
     //    { {op(e :: es) :: C, E, F} :: S, H}
     // -> { e :: op([] :: es) :: C, E, F} :: S, H}
-    frame->control = cons(make_exp_ctx(exp->u.prim_op.args->front()),
-                          frame->control);
-    ctx->pos++;
+    frame->todo = cons(make_exp_act(exp->u.prim_op.args->front()),
+                          frame->todo);
+    act->pos++;
     break;
   case Call:
     //    { {e(es) :: C, E, F} :: S, H}
     // -> { {e :: [](es) :: C, E, F} :: S, H}
-    frame->control = cons(make_exp_ctx(exp->u.call.fun),
-                          frame->control);
-    ctx->pos++;
+    frame->todo = cons(make_exp_act(exp->u.call.fun),
+                          frame->todo);
+    act->pos++;
     break;
   }
 }
 
 void step_stmt(State* state) {
   Frame* frame = state->stack->curr;
-  Ctx* ctx = frame->control->curr;
-  Stmt* stmt = ctx->u.stmt;
+  Act* act = frame->todo->curr;
+  Stmt* stmt = act->u.stmt;
   cout << "--- step stmt "; print_stmt(stmt, 1); cout << " --->" << endl;
   switch (stmt->tag) {
   case Assign:
     //    { {(lv = e) :: C, E, F} :: S, H}
     // -> { {lv :: ([] = e) :: C, E, F} :: S, H}
-    frame->control = cons(make_lval_ctx(stmt->u.assign.lhs),
-                          frame->control);
-    ctx->pos++;
+    frame->todo = cons(make_lval_act(stmt->u.assign.lhs),
+                          frame->todo);
+    act->pos++;
     break;
   case Free:
     cerr << "step free not implemented" << endl;
@@ -543,47 +544,47 @@ void step_stmt(State* state) {
   case IfGoto:
     //    { {(if (e) goto l) :: C, E, F} :: S, H}
     // -> { { e :: (if [] goto l) :: C, E, F} :: S, H}
-    frame->control = cons(make_exp_ctx(stmt->u.if_goto.cond),
-                          frame->control);
-    ctx->pos++;
+    frame->todo = cons(make_exp_act(stmt->u.if_goto.cond),
+                          frame->todo);
+    act->pos++;
     break;
   case Label:
     //    { {(l: s) :: C, E, F} :: S, H}
     // -> { {s :: C, E, F} :: S, H}
-    frame->control = cons(make_stmt_ctx(stmt->u.labeled.stmt),
-                          frame->control->next);
+    frame->todo = cons(make_stmt_act(stmt->u.labeled.stmt),
+                          frame->todo->next);
     break;
   case Return:
     //    { {return e :: C, E, F} :: S, H}
     // -> { {e :: return [] :: C, E, F} :: S, H}
-    frame->control = cons(make_exp_ctx(stmt->u.ret),
-                          frame->control);
-    ctx->pos++;
+    frame->todo = cons(make_exp_act(stmt->u.ret),
+                          frame->todo);
+    act->pos++;
     break;
   case Seq:
     //    { { (s1,s2) :: C, E, F} :: S, H}
     // -> { { s1 :: s2 :: C, E, F} :: S, H}
-    frame->control = cons(make_stmt_ctx(stmt->u.seq.stmt),
-                              cons(make_stmt_ctx(stmt->u.seq.next),
-                                       frame->control->next));
+    frame->todo = cons(make_stmt_act(stmt->u.seq.stmt),
+                              cons(make_stmt_act(stmt->u.seq.next),
+                                       frame->todo->next));
     break;
   }
 }
 
 void step(State* state) {
   Frame* frame = state->stack->curr;
-  Ctx* ctx = frame->control->curr;
-  switch (ctx->tag) {
-  case ValCtx:
+  Act* act = frame->todo->curr;
+  switch (act->tag) {
+  case ValAct:
     handle_value(state);
     break;
-  case LValCtx:
+  case LValAct:
     step_lvalue(state);
     break;
-  case ExpCtx:
+  case ExpAct:
     step_exp(state);
     break;
-  case StmtCtx:
+  case StmtAct:
     step_stmt(state);
     break;
   } // switch
@@ -593,23 +594,23 @@ int interp_program(list<FunDef*>* fs) {
   State* state = new State();
   state->funs = fs;
 
-  Env* env = global_functions(state);
+  init_global_functions(state);
   address a = state->heap.size();
   state->heap.push_back(0);
 
   Exp* call_main = make_call(0, make_var(0, "main"), new list<Exp*>());
-  Cons<Ctx*>* control = cons(make_exp_ctx(call_main), (Cons<Ctx*>*)0);
-  Frame* frame = new Frame(0, env, control);
+  Cons<Act*>* todo = cons(make_exp_act(call_main), (Cons<Act*>*)0);
+  Frame* frame = new Frame(0, global_functions, todo);
   state->stack = cons(frame, (Cons<Frame*>*)0);
 
   print_state(state);
   // Run the program
   while (length(state->stack) > 1
-         || length(state->stack->curr->control) > 1
-         || state->stack->curr->control->curr->tag != ValCtx) {
+         || length(state->stack->curr->todo) > 1
+         || state->stack->curr->todo->curr->tag != ValAct) {
     step(state);
     print_state(state);
   }
-  Value* v = state->stack->curr->control->curr->u.val;
+  Value* v = state->stack->curr->todo->curr->u.val;
   return val_to_int(v);
 }

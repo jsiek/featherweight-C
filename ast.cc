@@ -47,20 +47,22 @@ Type* make_ptr_type(int lineno, Type* type) {
 void print_type(Type* t) {
   switch (t->tag) {
   case BoolT:
-    printf("bool");
+    cout << "bool";
     break;
   case IntT:
-    printf("int");
+    cout << "int";
     break;
   case PtrT:
     print_type(t->u.ptr.type);
-    printf("*");
+    cout << "*";
+    break;
   case FunT:
-    printf("fun ");
-    printf("(");
+    cout << "fun ";
+    cout << "(";
     print_list(t->u.fun.params, print_type, ", ");
-    printf(") ");
+    cout << " ";
     print_type(t->u.fun.ret);
+    break;
   }
 }
 
@@ -139,36 +141,44 @@ Exp* make_binop(int lineno, enum Operator op, Exp* arg1, Exp* arg2) {
 }
 
 Exp* make_call(int lineno, Exp* fun, list<Exp*>* args) {
-  Exp* s = new Exp();
-  s->lineno = lineno;
-  s->tag = Call;
-  s->u.call.fun = fun;
-  s->u.call.args = new vector<Exp*>(args->begin(), args->end());
-  return s;
+  Exp* e = new Exp();
+  e->lineno = lineno;
+  e->tag = Call;
+  e->u.call.fun = fun;
+  e->u.call.args = new vector<Exp*>(args->begin(), args->end());
+  return e;
+}
+
+Exp* make_malloc(int lineno, Type* type) {
+  Exp* e = new Exp();
+  e->lineno = lineno;
+  e->tag = Malloc;
+  e->u.malloc = type;
+  return e;
 }
 
 void print_op(Operator op) {
   switch (op) {
   case Neg:
-    printf("-");
+    cout << "-";
     break;
   case Add:
-    printf("+");
+    cout << "+";
     break;
   case Sub:
-    printf("-");
+    cout << "-";
     break;
   case Not:
-    printf("!");
+    cout << "!";
     break;
   case And:
-    printf("&&");
+    cout << "&&";
     break;
   case Or:
-    printf("||");
+    cout << "||";
     break;
   case Eq:
-    printf("==");
+    cout << "==";
     break;
   }
 }
@@ -212,6 +222,11 @@ void print_exp(Exp* e) {
     print_exp(e->u.call.fun);
     cout << "(";
     print_vector(e->u.call.args, print_exp, ", ");
+    cout << ")";
+    break;
+  case Malloc:
+    cout << "malloc(";
+    print_type(e->u.malloc);
     cout << ")";
     break;
   }
@@ -332,9 +347,9 @@ void print_params(VarTypes* ps) {
   int i = 0;
   for (auto iter = ps->begin(); iter != ps->end(); ++iter, ++i) {
     if (i != 0)
-      printf(", ");
+      cout << ", ";
     print_type(iter->second);
-    printf(" %s", iter->first.c_str());
+    cout << " " << iter->first;
   }
 }
 
@@ -342,7 +357,7 @@ void print_var_decls(VarTypes* ps) {
   int i = 0;
   for (auto iter = ps->begin(); iter != ps->end(); ++iter, ++i) {
     print_type(iter->second);
-    printf(" %s; ", iter->first.c_str());
+    cout << " " << iter->first << "; ";
   }
 }
 

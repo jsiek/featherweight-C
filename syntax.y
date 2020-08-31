@@ -86,6 +86,7 @@ static list<FunDef*> program;
 %token RETURN
 %token TRUE
 %token FALSE
+%token MALLOC
 %left BAR
 %nonassoc IF 
 %nonassoc LP RP
@@ -161,6 +162,7 @@ expr:
 | expr OR expr     { $$ = make_binop(yylineno, Or, $1, $3); }
 | NOT expr         { $$ = make_unop(yylineno, Not, $2); }
 | MINUS expr       { $$ = make_unop(yylineno, Neg, $2); }
+| MALLOC LP type RP { $$ = make_malloc(yylineno, $3); }
 | LP expr RP       { $$ = $2; }
 | expr LP expr_list RP { $$ = make_call(yylineno, $1, $3); }
 ;
