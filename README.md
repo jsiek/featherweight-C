@@ -99,19 +99,19 @@ action on the to-do list, in this case the addition. The addition
 action spawns an action for subexpression `e2`, increments
 `pos` to `1`, and remembers `n1`.
 
-   e2 [-1] :: (e1 + e2) [1](n1) :: ...
+    e2 [-1] :: (e1 + e2) [1](n1) :: ...
 
 Skipping over the processing of `e2`, it eventually turns into
 an integer value `n2`:
 
-   n2 :: (e1 + e2) [1](n1) :: ...
+    n2 :: (e1 + e2) [1](n1) :: ...
 
 Again the `step` function invokes `handle_value` which inspects
 the addition action, which now has the results for its arguments,
 and performs the addition and pushes the result on the to-do list.
 Let `n3` be the result of adding `n1` and `n2`.
 
-   n3 :: ...
+    n3 :: ...
 
 The heap is an array of values. It is used not only for `malloc` but
 also to store function arguments and local variables.  A pointer is
