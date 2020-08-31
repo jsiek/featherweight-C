@@ -106,10 +106,9 @@ an integer value `n2`:
 
     n2 :: (e1 + e2) [1](n1) :: ...
 
-Again the `step` function invokes `handle_value` which inspects
-the addition action, which now has the results for its arguments,
-and performs the addition and pushes the result on the to-do list.
-Let `n3` be the result of adding `n1` and `n2`.
+Again the `step` function invokes `handle_value` and dispatches to the
+addition action which performs the arithmetic and pushes the result on
+the to-do list.  Let `n3` be the sum of `n1` and `n2`.
 
     n3 :: ...
 
@@ -123,7 +122,11 @@ of the right-hand side into the heap at the index specified by the
 left-hand side lvalue.
 
 As you might expect, function calls push a new frame on the stack and
-the `return` statement pops a frame off the stack.
+the `return` statement pops a frame off the stack. The parameter
+passing semantics is call-by-value, so the machine applies `copy_val`
+to the incoming arguments and the outgoing return value.  Also, the
+machine is careful to kill the parameters and local variables when the
+function call is complete.
 
 The handling of the `goto` statement deserves some explanation.  It
 overwrites the todo list of the frame with a new one computed by the
