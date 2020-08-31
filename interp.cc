@@ -508,6 +508,14 @@ void handle_value(State* state) {
       frame->todo = cons(make_val_act(ret_val), frame->todo);
       break;
     }
+    case Free: {
+      //    { {a :: free [] :: C, E, F} :: S, H}
+      // -> { { C, E, F} :: S, H - {a}}
+      address a = val_to_ptr(val_act->u.val);
+      state->heap[a]->alive = false;
+      frame->todo = frame->todo->next->next;
+      break;
+    }
     default:
       cerr << "unhandled statement ";
       print_stmt(stmt, 1);
@@ -635,7 +643,10 @@ void step_stmt(State* state) {
     act->pos++;
     break;
   case Free:
-    cerr << "step free not implemented" << endl;
+    //    { {free e :: C, E, F} :: S, H}
+    // -> { e :: free [] :: C, E, F} :: S, H}
+    frame->todo = cons(make_exp_act(stmt->u.free), frame->todo);
+    act->pos++;    
     break;
   case If:
     //    { {(if (e) thn else els) :: C, E, F} :: S, H}
