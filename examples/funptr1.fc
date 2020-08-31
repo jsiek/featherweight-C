@@ -1,0 +1,9 @@
+fun add1(int x) int {
+  return x + 1;
+}
+
+fun main() int {
+  fun(int)int f;
+  f = add1;
+  return f(-1);
+}

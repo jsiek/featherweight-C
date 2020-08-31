@@ -114,19 +114,6 @@ input:
     printf("type checking complete\n");
     int result = interp_program($1);
     cout << "result: " << result << endl;
-    
-  /*
-  Type* t = typecheck($1, 0, 0);
-  Value* v = eval($1, 0, 0); 
-  if (v == 0) {
-    printf("error during evaluation\n");
-  } else {
-    print_value(v);
-    printf(" : ");
-    print_type(t);
-    printf("\n");
-  }
-  */
  }
 ;
 params:
