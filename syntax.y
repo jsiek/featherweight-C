@@ -177,18 +177,14 @@ expr_list:
 | expr COMMA expr_list { $$ = $3; $$->push_front($1); }
 ;
 stmt:
-  lvalue ASSGN expr SEMICOLON
-    { $$ = make_assign(yylineno, $1, $3); }
-| FREE LP expr RP SEMICOLON
-    { $$ = make_free(yylineno, $3); }
-| GOTO ID SEMICOLON { $$ = make_goto(yylineno, $2); }
-| IF LP expr RP stmt ELSE stmt
-    { $$ = make_if(yylineno, $3, $5, $7); }
-| ID COLON stmt 
-    { $$ = make_labeled(yylineno, $1, $3); }
-| RETURN expr SEMICOLON
-    { $$ = make_return(yylineno, $2); }
-| LC stmt_list RC { $$ = $2; }
+  lvalue ASSGN expr SEMICOLON      { $$ = make_assign(yylineno, $1, $3); }
+| expr SEMICOLON                   { $$ = make_exp_stmt(yylineno, $1); }
+| FREE LP expr RP SEMICOLON        { $$ = make_free(yylineno, $3); }
+| GOTO ID SEMICOLON                { $$ = make_goto(yylineno, $2); }
+| IF LP expr RP stmt ELSE stmt     { $$ = make_if(yylineno, $3, $5, $7); }
+| ID COLON stmt                    { $$ = make_labeled(yylineno, $1, $3); }
+| RETURN expr SEMICOLON            { $$ = make_return(yylineno, $2); }
+| LC stmt_list RC                  { $$ = $2; }
 ;
 stmt_list :
   stmt { $$ = $1; }

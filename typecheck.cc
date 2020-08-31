@@ -140,6 +140,10 @@ void typecheck_stmt(Stmt* s, TypeEnv* env, Type* ret_type,
     expect_type("assign", lhsT, rhsT);
     break;
   }
+  case ExpStmt: {
+    typecheck_exp(s->u.exp, env);
+    break;
+  }
   case Free: {
     switch (typecheck_exp(s->u.free, env)->tag) {
     case PtrT:

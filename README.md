@@ -125,4 +125,14 @@ left-hand side lvalue.
 As you might expect, function calls push a new frame on the stack and
 the `return` statement pops a frame off the stack.
 
-The `goto` statement 
+The handling of the `goto` statement deserves some explanation.  It
+overwrites the todo list of the frame with a new one computed by the
+function `goto_label`. This function searches through the body of the
+current frame, looking for the target label. So the first parameter of
+`goto_label` is the target label and the second parameter is the
+current statement that it is searching.  Also, while searching,
+`goto_label` accumulates a todo list of statements that come after the
+one it is currently searching. The third parameter is for the
+accumulated todo list. Once `goto_label` finds a statement that is
+labeled with the target label, it adds that statement to the front of
+the accumulated todo list and returns it.

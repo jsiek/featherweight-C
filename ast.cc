@@ -234,6 +234,14 @@ void print_exp(Exp* e) {
 
 /***** Statements *****/
 
+Stmt* make_exp_stmt(int lineno, Exp* exp) {
+  Stmt* s = new Stmt();
+  s->lineno = lineno;
+  s->tag = ExpStmt;
+  s->u.exp = exp;
+  return s;
+}
+
 Stmt* make_assign(int lineno, Exp* lhs, Exp* rhs) {
   Stmt* s = new Stmt();
   s->lineno = lineno;
@@ -301,6 +309,10 @@ void print_stmt(Stmt* s, int depth) {
     return;
   }
   switch (s->tag) {
+  case ExpStmt:
+    print_exp(s->u.exp);
+    cout << ";";
+    break;
   case Assign:
     print_exp(s->u.assign.lhs);
     cout << " = ";

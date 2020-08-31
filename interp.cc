@@ -335,7 +335,7 @@ void call_function(vector<Value*> operas, State* state) {
   int pos = 1;
   for (auto vt = f->params->begin(); vt != f->params->end(); ++vt, ++pos) {
     address a = state->heap.size();
-    state->heap.push_back(operas[pos]);    
+    state->heap.push_back(copy_val(operas[pos]));
     env = new Env((*vt).first, a, env);
   }
   
@@ -467,6 +467,9 @@ void handle_value(State* state) {
   case StmtAct: {
     Stmt* stmt = act->u.stmt;
     switch (stmt->tag) {
+    case ExpStmt:
+      frame->todo = frame->todo->next->next;
+      break;
     case Assign:
       if (act->pos == 1) {
         //    { { a :: ([] = e) :: C, E, F} :: S, H}
@@ -495,8 +498,6 @@ void handle_value(State* state) {
                            frame->todo->next->next);
       }
       break;
-    case Goto:
-      break;
     case Return: {
       //    { {v :: return [] :: C, E, F} :: {C', E', F'} :: S, H}
       // -> { {v :: C', E', F'} :: S, H}
@@ -508,7 +509,9 @@ void handle_value(State* state) {
       break;
     }
     default:
-      cerr << "unhandled statement" << endl;
+      cerr << "unhandled statement ";
+      print_stmt(stmt, 1);
+      cerr << endl;
       exit(-1);
     } // switch stmt
     break;
@@ -530,6 +533,7 @@ void step_lvalue(State* state) {
     // { {x :: C, E, F} :: S, H} -> { {E(x) :: C, E, F} :: S, H}
     address a = lookup(frame->env, *(exp->u.var), print_error_string);
     Value* v = make_ptr_val(a);
+    check_alive(v);
     frame->todo = cons(make_val_act(v), frame->todo->next);
     break;
   }
@@ -618,6 +622,11 @@ void step_stmt(State* state) {
   Stmt* stmt = act->u.stmt;
   cout << "--- step stmt "; print_stmt(stmt, 1); cout << " --->" << endl;
   switch (stmt->tag) {
+  case ExpStmt:
+    //    { {e :: C, E, F} :: S, H}
+    // -> { {e :: C, E, F} :: S, H}
+    frame->todo = cons(make_exp_act(stmt->u.exp), frame->todo);
+    break;
   case Assign:
     //    { {(lv = e) :: C, E, F} :: S, H}
     // -> { {lv :: ([] = e) :: C, E, F} :: S, H}
@@ -663,6 +672,12 @@ void step_stmt(State* state) {
 
 void step(State* state) {
   Frame* frame = state->stack->curr;
+  if (! frame->todo) {
+    cerr << "runtime error: fell off end of function " << frame->fun->name
+         << " without `return`" << endl;
+    exit(-1);
+  }
+  
   Act* act = frame->todo->curr;
   switch (act->tag) {
   case ValAct:
