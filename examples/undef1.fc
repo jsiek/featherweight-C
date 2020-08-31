@@ -1,0 +1,11 @@
+fun f() int* {
+  int x;
+  x = 0;
+  return &x;
+}
+
+fun main() int {
+  int* p;
+  p = f();
+  return *p;
+}

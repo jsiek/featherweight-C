@@ -18,6 +18,7 @@ RC    "}"
 INT   [0-9]+
 ID    [A-Za-z_][A-Za-z0-9_]*
 AND   "&&"
+AMP   "&"
 OR    "||"
 BANG "!"
 EQUAL "=="
@@ -36,6 +37,7 @@ TRUE   "true"
 FALSE  "false"
 %%
 {AND}    { return AND; }
+{AMP}    { return AMP; }
 {OR}     { return OR; }
 {BANG}   { return BANG; }
 {IF}     { return IF; }

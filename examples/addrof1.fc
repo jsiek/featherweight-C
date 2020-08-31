@@ -1,6 +1,7 @@
 fun main() int {
+  int x;
   int* p;
-  p = malloc(int);
+  p = &x;
   *p = 0;
   return *p;
 }

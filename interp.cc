@@ -27,20 +27,10 @@ struct Value {
   } u;
 };
 
-void print_val(Value* val) {
-  switch (val->tag) {
-  case IntT:
-    cout << val->u.integer;
-    break;
-  case BoolT:
-    cout << val->u.boolean;
-    break;
-  case FunT:
-    cout << "fun<" << val->u.fun->name << ">";
-    break;
-  case PtrT:
-    cout << "ptr<" << val->u.ptr << ">";
-    break;
+void check_alive(Value* v) {
+  if (! v->alive) {
+    cerr << "undefined: access to dead value" << endl;
+    exit(-1);
   }
 }
 
@@ -70,6 +60,41 @@ Value* make_ptr_val(address addr) {
   v->alive = true;
   v->tag = PtrT; v->alive = true; v->u.ptr = addr;
   return v;
+}
+
+Value* copy_val(Value* val) {
+  check_alive(val);
+  switch (val->tag) {
+  case IntT:
+    return make_int_val(val->u.integer);
+  case BoolT:
+    return make_bool_val(val->u.boolean);
+  case FunT:
+    return make_fun_val(val->u.fun);
+  case PtrT:
+    return make_ptr_val(val->u.ptr);
+  }
+}
+
+void print_val(Value* val) {
+  if (! val->alive) {
+    cout << "X";
+    return;
+  }
+  switch (val->tag) {
+  case IntT:
+    cout << val->u.integer;
+    break;
+  case BoolT:
+    cout << val->u.boolean;
+    break;
+  case FunT:
+    cout << "fun<" << val->u.fun->name << ">";
+    break;
+  case PtrT:
+    cout << "ptr<" << val->u.ptr << ">";
+    break;
+  }
 }
 
 /***** Actions *****/
@@ -215,13 +240,6 @@ void print_state(State* state) {
 /***** Auxilliary Functions *****/
 
 
-void check_alive(Value* v) {
-  if (! v->alive) {
-    cerr << "undefined: access to dead value" << endl;
-    exit(-1);
-  }
-}
-
 int val_to_int(Value* v) {
   check_alive(v);
   switch (v->tag) {
@@ -341,31 +359,46 @@ Cons<Act*>* goto_label(string label, Stmt* stmt, Cons<Act*>* todo) {
   switch (stmt->tag) {
   case Label: {
     if (*(stmt->u.labeled.label) == label) {
-      return cons(make_stmt_act(stmt->u.labeled.stmt), (Cons<Act*>*)0);
+      return cons(make_stmt_act(stmt->u.labeled.stmt), todo);
     } else {
-      return goto_label(label, stmt->u.labeled.stmt,
-                        cons(make_stmt_act(stmt), todo));
+      return goto_label(label, stmt->u.labeled.stmt, todo);
     }
   }
   case Seq: {
-    Cons<Act*>* new_todo = goto_label(label, stmt->u.seq.stmt, todo);
-    if (new_todo) {
-      return new_todo;
+    Cons<Act*>* first_todo = goto_label(label, stmt->u.seq.stmt,
+                              cons(make_stmt_act(stmt->u.seq.next), todo));
+    if (first_todo) {
+      return first_todo;
     } else {
       return goto_label(label, stmt->u.seq.next, todo);
     }
   }
   case If: {
-    Cons<Act*>* new_todo = goto_label(label, stmt->u.if_stmt.thn, todo);
-    if (new_todo) {
-      return new_todo;
+    Cons<Act*>* thn_todo = goto_label(label, stmt->u.if_stmt.thn, todo);
+    if (thn_todo) {
+      return thn_todo;
     } else {
       return goto_label(label, stmt->u.if_stmt.els, todo);
     }
   }
   default:
+    cerr << "runtime error: jump to undefined label" << endl;
     return 0;
   } // switch (stmt->tag)
+}
+
+
+void kill_params_and_locals(State* state, Frame* frame) {
+  for (auto iter = frame->fun->params->begin();
+       iter != frame->fun->params->end(); ++iter) {
+    address a = lookup(frame->env, (*iter).first, print_error_string);
+    state->heap[a]->alive = false;
+  }
+  for (auto iter = frame->fun->locals->begin();
+       iter != frame->fun->locals->end(); ++iter) {
+    address a = lookup(frame->env, (*iter).first, print_error_string);
+    state->heap[a]->alive = false;
+  }
 }
 
 /***** State transition for handling a value *****/
@@ -464,15 +497,19 @@ void handle_value(State* state) {
       break;
     case Goto:
       break;
-    case Return:
+    case Return: {
       //    { {v :: return [] :: C, E, F} :: {C', E', F'} :: S, H}
       // -> { {v :: C', E', F'} :: S, H}
+      Value* ret_val = copy_val(val_act->u.val);
+      kill_params_and_locals(state, frame);
       state->stack = state->stack->next;
       frame = state->stack->curr;
-      frame->todo = cons(val_act, frame->todo);
+      frame->todo = cons(make_val_act(ret_val), frame->todo);
       break;
+    }
     default:
       cerr << "unhandled statement" << endl;
+      exit(-1);
     } // switch stmt
     break;
   }
@@ -550,7 +587,9 @@ void step_exp(State* state) {
     // { { malloc(T) :: C, E, F} :: S, H}
     // -> { { a :: C, E, F} :: S, H(a = _) }
     address a = state->heap.size();
-    state->heap.push_back(0);
+    Value* v = make_int_val(-1);
+    v->alive = false;
+    state->heap.push_back(v);
     frame->todo = cons(make_val_act(make_ptr_val(a)), frame->todo->next);
     break;
   }
@@ -648,8 +687,6 @@ int interp_program(list<FunDef*>* fs) {
   state->funs = fs;
 
   init_global_functions(state);
-  address a = state->heap.size();
-  state->heap.push_back(0);
 
   Exp* call_main = make_call(0, make_var(0, "main"), new list<Exp*>());
   Cons<Act*>* todo = cons(make_exp_act(call_main), (Cons<Act*>*)0);

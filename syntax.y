@@ -77,6 +77,7 @@ static list<FunDef*> program;
 %token RC
 %token PLUS
 %token ASTR
+%token AMP
 %token MINUS
 %token DIV
 %token EQUAL
@@ -97,7 +98,7 @@ static list<FunDef*> program;
 %nonassoc EQUAL
 %left AND OR
 %left PLUS MINUS
-%nonassoc NOT ASTR
+%nonassoc NOT ASTR AMP
 %start input
 %locations
 %%
@@ -166,6 +167,7 @@ expr:
 | NOT expr         { $$ = make_unop(yylineno, Not, $2); }
 | MINUS expr       { $$ = make_unop(yylineno, Neg, $2); }
 | MALLOC LP type RP { $$ = make_malloc(yylineno, $3); }
+| AMP expr         { $$ = make_addr_of(yylineno, $2); }
 | LP expr RP       { $$ = $2; }
 | expr LP expr_list RP { $$ = make_call(yylineno, $1, $3); }
 ;
