@@ -136,3 +136,5 @@ one it is currently searching. The third parameter is for the
 accumulated todo list. Once `goto_label` finds a statement that is
 labeled with the target label, it adds that statement to the front of
 the accumulated todo list and returns it.
+
+The `examples/` subdirectory includes some Featherweight C programs.

@@ -1,6 +1,6 @@
-// This tests call-by-value aspect of parameter passing.
-// This makes sure that when the value in x dies,
-// it does not cause the value in a to also die.
+// This tests the call-by-value aspect of parameter passing.
+// This makes sure that when the value in `x` dies,
+// it does not cause the value in `a` to also die.
 
 fun f(int x) int {
   return 0;

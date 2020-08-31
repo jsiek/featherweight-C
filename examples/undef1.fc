@@ -1,3 +1,6 @@
+// The behavior of this program is undefined because it tries to
+// access a local variable after its lifetime is over.
+
 fun f() int* {
   int x;
   x = 0;
