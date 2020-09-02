@@ -149,7 +149,7 @@ void typecheck_stmt(Stmt* s, TypeEnv* env, Type* ret_type,
     case PtrT:
       break;
     default:
-      printf("error, free expects a pointer\n");
+      cerr << "error, free expects a pointer" << endl;
       exit(-1);
     }
     break;
@@ -165,7 +165,7 @@ void typecheck_stmt(Stmt* s, TypeEnv* env, Type* ret_type,
     break;
   case Label:
     if (labels.count(*s->u.labeled.label) > 0) {
-      printf("error, duplicate label %s\n", s->u.labeled.label->c_str());
+      cerr << "error, duplicate label " << *(s->u.labeled.label) << endl;
       exit(-1);
     }
     labels.insert(*s->u.labeled.label);
@@ -188,7 +188,7 @@ void typecheck_fun_def(FunDef* f, TypeEnv* env) {
     expect_type("return type of `main`",
                 make_int_type(f->lineno), f->return_type);
     if (f->params->size() != 0) {
-      printf("error, main function may not have any parameters\n");
+      cerr << "error, main function may not have any parameters" << endl;
       exit(-1);
     }
   }

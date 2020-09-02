@@ -389,19 +389,19 @@ void print_var_decls(VarTypes* ps) {
 }
 
 void print_fun_def_depth(FunDef* f, int depth) {
-  printf("fun %s", f->name.c_str());
-  printf("(");
+  cout << "fun " << f->name;
+  cout << "(";
   print_params(f->params);
-  printf(") ");
+  cout << " ";
   print_type(f->return_type);
-  printf(" {\n");
+  cout << " {" << endl;
   if (f->locals->size() > 0) {
-    printf("  ");
+    cout << "  ";
     print_var_decls(f->locals);
-    printf("\n");
+    cout << endl;
   }
   print_stmt(f->body, depth);
-  printf("\n}\n");
+  cout << endl << "}" << endl;
 }
 
 void print_fun_def(FunDef* f) {
