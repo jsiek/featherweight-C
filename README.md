@@ -13,15 +13,16 @@ tools.
 * `syntax.l` the lexer specification
 * `syntax.y` the grammar
 
-The parser generates an abstract syntax tree.
+The parser translates program text into an abstract syntax tree (AST).
 
-* `ast.h` structure definitions for the AST and declarations of
-  functions for creating and printing ASTs.
-  
-* `ast.cc` definitions of functions for creating and printing ASTs.
+* `ast.h` includes structure definitions for the AST and function
+  declarations for creating and printing ASTs.
+* `ast.cc` contains the function definitions for creating and printing
+  ASTs.
 
-The type checker makes sure that the AST is a valid program.
-It prints an error and exits if the AST is invalid.
+The type checker defines what it means for an AST to be a valid
+program. The type checker prints an error and exits if the AST is
+invalid.
 
 * `typechecker.h`
 * `typechecker.cc`
