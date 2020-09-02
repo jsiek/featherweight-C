@@ -8,7 +8,9 @@ Booleans, pointers, and function pointers. Regarding control-flow, it
 includes if statements, goto, and function calls.
 
 The parser is implemented using the flex and bison parser generator
-tools.
+tools. The syntax of Featherweight C diverges in a few places from C
+to make for a simpler grammar. This grammar does not have any parser
+conflicts (shift/reduce or reduce/reduce).
 
 * [`syntax.l`](./syntax.l) the lexer specification
 * [`syntax.y`](./syntax.y) the grammar
