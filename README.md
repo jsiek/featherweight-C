@@ -11,7 +11,7 @@ The parser is implemented using the flex and bison parser generator
 tools.
 
 * [`syntax.l`](./syntax.l) the lexer specification
-* `syntax.y` the grammar
+* [`syntax.y`](./syntax.y) the grammar
 
 The parser translates program text into an abstract syntax tree (AST).
 
@@ -23,8 +23,8 @@ The type checker defines what it means for an AST to be a valid
 program. The type checker prints an error and exits if the AST is
 invalid.
 
-* `typechecker.h`
-* `typechecker.cc`
+* [`typecheck.h`](./typecheck.h)
+* [`typecheck.cc`](./typecheck.cc)
 
 The parser and type checker together specify the static semantics
 of Featherweight C.
@@ -46,8 +46,8 @@ as a definitional interpreter (a recursive function that interprets
 the program), but its more difficult to handle complex control flow in
 a definitional interpreter.
 
-* `interp.h` declares the `interp_program` function.
-* `interp.cc` implements `interp_program` function using an
+* [`interp.h`](./interp.h) declares the `interp_program` function.
+* [`interp.cc`](./interp.cc) implements `interp_program` function using an
   abstract machine, as described below.
 
 The abstract machine implements a state-transition system.  The state
