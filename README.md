@@ -15,9 +15,9 @@ tools.
 
 The parser translates program text into an abstract syntax tree (AST).
 
-* `ast.h` includes structure definitions for the AST and function
+* [`ast.h`](./ast.h) includes structure definitions for the AST and function
   declarations for creating and printing ASTs.
-* `ast.cc` contains the function definitions.
+* [`ast.cc`](./ast.cc) contains the function definitions.
 
 The type checker defines what it means for an AST to be a valid
 program. The type checker prints an error and exits if the AST is
